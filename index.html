@@ -269,6 +269,8 @@ tbody td{padding:7px 10px}
   <div class="tab" onclick="showTab('planning')"><span class="tab-icon">📋</span><span class="tab-label">Planning</span></div>
   <div class="tab" onclick="showTab('classement')"><span class="tab-icon">▲</span><span class="tab-label">Classement</span></div>
   <div class="tab" onclick="showTab('elimination')"><span class="tab-icon">⚡</span><span class="tab-label">Élimination</span></div>
+  <div class="tab hidden" id="tab-btn-phase2" onclick="showTab('phase2')"><span class="tab-icon">◈◈</span><span class="tab-label">Phase 2</span></div>
+  <div class="tab hidden" id="tab-btn-interclub" onclick="showTab('interclub')"><span class="tab-icon">🏸</span><span class="tab-label">Interclub</span></div>
 </nav>
 <div id="save-dot" class="hidden-dot" title="Données sauvegardées"></div>
 
@@ -292,6 +294,11 @@ tbody td{padding:7px 10px}
         <div class="phase-option-icon">⚽</div>
         <div class="phase-option-title">Mode Ligue</div>
         <div class="phase-option-desc">Poule unique, x adversaires par joueur</div>
+      </div>
+      <div class="phase-option" id="fmt-interclub" onclick="selectFormat('interclub')" style="flex:1;min-width:130px;padding:14px 12px">
+        <div class="phase-option-icon">🏸</div>
+        <div class="phase-option-title">Interclub</div>
+        <div class="phase-option-desc">Rencontres par équipes, matchs par poule</div>
       </div>
     </div>
   </div>
@@ -354,8 +361,48 @@ tbody td{padding:7px 10px}
         <div id="ligue-info" class="alert alert-info hidden" style="margin-top:8px"></div>
       </div>
 
-      <div class="card">
-        <div class="card-title">🚀 Lancer</div>
+      <!-- CONFIG MODE INTERCLUB -->
+      <div class="card hidden" id="config-interclub">
+        <div class="card-title">🏸 Configuration Interclub</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-row">
+            <label class="form-label">Nombre d'équipes</label>
+            <input type="number" id="ic-num-teams" value="4" min="2" max="32" oninput="updateInterclubInfo()">
+          </div>
+          <div class="form-row">
+            <label class="form-label">Nombre de poules</label>
+            <input type="number" id="ic-num-poules" value="1" min="1" max="8" oninput="updateInterclubInfo()">
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:4px">
+          <label class="form-label">Format de compétition</label>
+          <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.86rem">
+              <input type="radio" name="ic-format" value="club" checked onchange="updateInterclubInfo()" style="accent-color:var(--accent)"> Club (victoire par nb de matchs)
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.86rem">
+              <input type="radio" name="ic-format" value="unss" onchange="updateInterclubInfo()" style="accent-color:var(--accent3)"> UNSS (victoire par nb de points)
+            </label>
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:6px">
+          <label class="form-label">Format des sets</label>
+          <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.86rem">
+              <input type="radio" name="ic-sets" value="1" checked style="accent-color:var(--accent)"> 1 set
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.86rem">
+              <input type="radio" name="ic-sets" value="2" style="accent-color:var(--accent)"> 2 sets gagnants (3 sets max)
+            </label>
+          </div>
+        </div>
+        <div class="card-title" style="margin-top:12px;margin-bottom:8px">📋 Matchs par rencontre</div>
+        <div id="ic-match-types-container">
+          <!-- Dynamically populated -->
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="addInterclubMatchType()" style="margin-top:6px">+ Ajouter un type de match</button>
+        <div id="ic-info" class="alert alert-info hidden" style="margin-top:8px"></div>
+      </div>
         <p id="launch-desc" style="color:var(--muted);font-size:.84rem;margin-bottom:12px">Les joueurs sont répartis en <strong style="color:var(--accent)">évitant le même établissement dans une poule</strong>. La séparation est optimisée automatiquement.</p>
         <button class="btn btn-primary btn-full" onclick="startTournament()">▶ Démarrer le Tournoi</button>
       </div>
@@ -365,13 +412,15 @@ tbody td{padding:7px 10px}
 
 <!-- POULES -->
 <div id="tab-poules" class="hidden">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;flex-wrap:wrap;gap:8px">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px">
     <div><div class="section-title"><span>Phase</span> de Poules</div><div class="section-sub">Cliquez sur un match pour saisir le score</div></div>
     <div style="display:flex;gap:7px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="checkPoulesComplete()">Vérifier avancement</button>
       <button class="btn btn-primary btn-sm" onclick="showPhaseTransition()">Phase suivante →</button>
     </div>
   </div>
+  <!-- Sélecteur de phase (visible si plusieurs phases) -->
+  <div id="phase-selector" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px"></div>
   <div id="status-bar-poules" class="status-bar"></div>
   <div id="poules-container"></div>
 </div>
@@ -399,6 +448,16 @@ tbody td{padding:7px 10px}
 <!-- ELIMINATION -->
 <div id="tab-elimination" class="hidden">
   <div id="elimination-container"></div>
+</div>
+
+<!-- PHASE 2 (nouvelles poules après ligue) -->
+<div id="tab-phase2" class="hidden">
+  <div id="phase2-container"></div>
+</div>
+
+<!-- INTERCLUB -->
+<div id="tab-interclub" class="hidden">
+  <div id="interclub-container"></div>
 </div>
 
 </main>
@@ -564,7 +623,26 @@ tbody td{padding:7px 10px}
   </div>
 </div>
 
-<!-- MODAL: New tournament name -->
+<!-- MODAL: Interclub match score -->
+<div id="modal-ic-score" class="modal-overlay hidden">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">Score <span style="color:var(--accent)" id="ic-modal-match-type"></span></div>
+    <div class="modal-sub" id="ic-modal-teams"></div>
+    <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:.75rem;color:var(--muted)">Joueurs :</span>
+      <input type="text" id="ic-modal-players1" placeholder="Joueur(s) équipe A…" style="flex:1;min-width:120px;font-size:.85rem">
+      <span style="color:var(--muted)">vs</span>
+      <input type="text" id="ic-modal-players2" placeholder="Joueur(s) équipe B…" style="flex:1;min-width:120px;font-size:.85rem">
+    </div>
+    <div id="ic-sets-container">
+      <!-- sets rendered dynamically -->
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeIcModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveIcMatchScore()">✓ Valider</button>
+    </div>
+  </div>
+</div>
 <div id="modal-new-t" class="modal-overlay hidden">
   <div class="modal" style="max-width:360px">
     <div class="modal-title">Nouveau <span style="color:var(--accent)">Tournoi</span></div>
@@ -617,12 +695,16 @@ function switchT(id){
   document.getElementById('phase-label').textContent=
     t.currentPhase==='setup'?'SETUP':
     t.currentPhase==='poules'?(t.format==='ligue'?'PHASE DE LIGUE':'PHASE DE POULES'):
+    t.currentPhase==='interclub'?'INTERCLUB':
     t.currentPhase==='elimination'?(t.bracket?.isDouble?'DOUBLE ÉLIMINATION':'ÉLIMINATION DIRECTE'):'SETUP';
-  // Restore format selector UI
   const fmt=t.format||'poules';
   currentFormat=fmt;
+  currentPoulePhaseIdx=-1;
+  document.getElementById('tab-btn-phase2').classList.toggle('hidden',t.poulePhases.length<2);
+  document.getElementById('tab-btn-interclub').classList.toggle('hidden',!t.interclub?.started);
   selectFormat(fmt);
-  renderPlayerList(); showTab('setup');
+  renderPlayerList();
+  showTab(fmt==='interclub'?'interclub':'setup');
 }
 function deleteT(id,e){
   e.stopPropagation();
@@ -641,7 +723,7 @@ function renderTBar(){
 // ══════════════════════════════════════════════════════
 //  TABS
 // ══════════════════════════════════════════════════════
-const TABS=['setup','poules','planning','classement','elimination'];
+const TABS=['setup','poules','planning','classement','elimination','phase2','interclub'];
 function showTab(name){
   TABS.forEach(t=>document.getElementById('tab-'+t).classList.toggle('hidden',t!==name));
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',TABS[i]===name));
@@ -649,6 +731,8 @@ function showTab(name){
   if(name==='poules') renderPoules();
   if(name==='planning') renderPlanning();
   if(name==='elimination') renderBracket();
+  if(name==='phase2') renderPhase2();
+  if(name==='interclub') renderInterclub();
 }
 
 // ══════════════════════════════════════════════════════
@@ -727,18 +811,26 @@ function updateConfigInfo(){
 // ══════════════════════════════════════════════════════
 //  FORMAT SELECTOR
 // ══════════════════════════════════════════════════════
-let currentFormat='poules'; // 'poules' | 'ligue'
+let currentFormat='poules'; // 'poules' | 'ligue' | 'interclub'
 
 function selectFormat(fmt){
   currentFormat=fmt;
-  document.getElementById('fmt-poules').classList.toggle('selected',fmt==='poules');
-  document.getElementById('fmt-ligue').classList.toggle('selected',fmt==='ligue');
-  document.getElementById('config-poules-classic').classList.toggle('hidden',fmt==='ligue');
-  document.getElementById('config-ligue').classList.toggle('hidden',fmt==='poules');
+  ['poules','ligue','interclub'].forEach(f=>{
+    document.getElementById('fmt-'+f)?.classList.toggle('selected',f===fmt);
+  });
+  document.getElementById('config-poules-classic').classList.toggle('hidden',fmt!=='poules');
+  document.getElementById('config-ligue').classList.toggle('hidden',fmt!=='ligue');
+  document.getElementById('config-interclub').classList.toggle('hidden',fmt!=='interclub');
+  // Hide player list for interclub (teams manage their own players)
+  document.getElementById('setup-col1').classList.toggle('hidden',fmt==='interclub');
   const desc=document.getElementById('launch-desc');
   if(fmt==='ligue'){
     desc.innerHTML='Chaque joueur affronte un nombre défini d\'adversaires dans une <strong style="color:var(--accent)">poule unique</strong>. Les têtes de série sont protégées et s\'affrontent en dernier.';
     updateLigueInfo();
+  } else if(fmt==='interclub'){
+    desc.innerHTML='Les équipes s\'affrontent en poule. Chaque rencontre se compose de plusieurs matchs individuels.';
+    initInterclubMatchTypes();
+    updateInterclubInfo();
   } else {
     desc.innerHTML='Les joueurs sont répartis en <strong style="color:var(--accent)">évitant le même établissement dans une poule</strong>. La séparation est optimisée automatiquement.';
     updateConfigInfo();
@@ -754,31 +846,25 @@ function updateLigueInfo(){
   if(n<2){el.classList.add('hidden');return;}
 
   const actualOpp=Math.min(opp,n-1);
-  // Total match-slots = n * actualOpp. Each match uses 2 slots.
-  // If n*actualOpp is odd, some players get 1 less match.
   const totalSlots=n*actualOpp;
   const totalMatches=Math.floor(totalSlots/2);
-  const remainder=totalSlots%2; // 1 = odd → one player gets 1 match less
-
-  // How many players will have actualOpp-1 matches?
-  // If remainder=1: 1 player has 1 fewer match (odd total)
-  // More precisely: if n*actualOpp is odd, (n*actualOpp - 2*totalMatches) extra slots
-  // = each match needs 2 players, so if n×opp is odd → impossible to distribute evenly
-  // → exactly 1 player plays actualOpp-1 matches
-  const hasUnequal=(totalSlots%2)!==0;
+  // Un graphe k-régulier sur n sommets existe ssi n*k est pair
+  const impossible=(totalSlots%2)!==0;
 
   let info=`✓ <strong>${n}</strong> joueurs · <strong>${actualOpp}</strong> matchs par joueur · <strong>${totalMatches}</strong> matchs au total`;
   let cls='alert alert-info';
 
-  if(hasUnequal){
-    info+=`<br>⚠️ ${n} × ${actualOpp} = ${totalSlots} créneaux (impair) → <strong>1 joueur aura seulement ${actualOpp-1} matchs</strong> (attribué aléatoirement au lancement)`;
+  if(impossible){
+    info+=`<br>⚠️ <strong>Attention :</strong> ${n} joueurs × ${actualOpp} matchs = ${totalSlots} (impair) — `
+        +`il est mathématiquement impossible de donner exactement ${actualOpp} matchs à chaque joueur. `
+        +`<strong>1 joueur aura ${actualOpp-1} matchs</strong> au lieu de ${actualOpp}.`;
     cls='alert alert-warn';
   }
   if(seeds>0){
     info+=`<br>🥇 <strong>${seeds}</strong> tête(s) de série — réparties en chapeaux, ne s'affrontent pas lors des premiers matchs`;
   }
   if(actualOpp<opp){
-    info+=`<br>⚠️ Maximum ${n-1} adversaires possibles avec ${n} joueurs`;
+    info+=`<br>⚠️ Maximum ${n-1} adversaires possibles avec ${n} joueurs (ajusté automatiquement)`;
     cls='alert alert-warn';
   }
   el.innerHTML=info; el.className=cls; el.classList.remove('hidden');
@@ -789,8 +875,11 @@ function updateLigueInfo(){
 // ══════════════════════════════════════════════════════
 function startTournament(){
   const t=T();if(!t)return;
+  if(currentFormat==='interclub'){
+    startInterclubTournament();
+    return;
+  }
   if(t.players.length<2){toast('Ajoutez au moins 2 joueurs','#e05c3a');return;}
-
   if(currentFormat==='ligue'){
     startLigueTournament();
   } else {
@@ -849,60 +938,93 @@ function buildLiguePhase(playerObjects, opponentsPerPlayer, nSeeds, phaseName){
   const n=players.length;
   const actualOpp=Math.min(opponentsPerPlayer, n-1);
 
-  // Assign hat (chapeau) to each player based on seeding
-  // Seed 1..nSeeds are the seeded players, rest are unseeded
-  // Chapeaux: divide seeds into groups, unseeded players are in last chapeau
-  const nHats=nSeeds>0?Math.ceil(nSeeds/2)+1:1; // rough grouping
-  const playerHat={}; // name → hat number (1-based, lower = better seed)
+  // ── Chapeaux pour la protection des têtes de série ──
+  const nHats=nSeeds>0?4:1;
+  const playerHat={};
   players.forEach((p,i)=>{
     if(i<nSeeds){
-      playerHat[p.name]=Math.floor(i/Math.max(1,Math.ceil(nSeeds/4)))+1;
+      const hatSize=Math.ceil(nSeeds/nHats);
+      playerHat[p.name]=Math.floor(i/hatSize)+1;
     } else {
-      playerHat[p.name]=nHats;
+      playerHat[p.name]=nHats+1;
     }
   });
 
-  // Build forbidden pairs (same hat → cannot be assigned early)
-  // Actually we just build ALL possible pairs and sort them by "priority"
-  // Priority: pairs from different hats go first, same-hat pairs go last
-  const allPairs=[];
-  for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
-    const pi=players[i],pj=players[j];
-    const hi=playerHat[pi.name]||nHats, hj=playerHat[pj.name]||nHats;
-    const sameHat=hi===hj&&hi<nHats; // seeds in same chapeau → defer
-    const sameEtab=pi.etablissement&&pi.etablissement===pj.etablissement;
-    // Priority score: lower = scheduled earlier
-    // sameHat → very high score (last), sameEtab → high score
-    const priority=(sameHat?10000:0)+(sameEtab?5000:0)+(Math.random()*100);
-    allPairs.push({p1:pi.name,p2:pj.name,priority,sameHat,sameEtab});
+  // ── Algorithme de matching par round-robin circulaire (Berger tables) ──
+  // Garantit que chaque joueur a EXACTEMENT actualOpp matchs
+  // en prenant les actualOpp premières "journées" d'un round-robin complet.
+  //
+  // Round-robin avec n joueurs :
+  //   Si n est pair : n-1 journées, chaque journée a n/2 matchs
+  //   Si n est impair : n journées, chaque journée a (n-1)/2 matchs (1 joueur exempt)
+  //
+  // On veut actualOpp journées. Chaque journée donne 1 match par joueur (ou 0 si exempt).
+
+  const nForRR=n%2===0?n:n+1; // padder si impair
+  const allPlayers=[...players.map(p=>p.name)];
+  if(n%2!==0) allPlayers.push('__bye__'); // joueur fictif
+
+  // Générer toutes les journées du round-robin (algorithme de rotation circulaire)
+  const rounds=[];
+  const fixed=allPlayers[0];
+  const rotating=allPlayers.slice(1);
+  const total=nForRR-1; // nb de journées dans un RR complet
+
+  for(let r=0;r<total;r++){
+    const day=[];
+    const arr=[fixed,...rotating];
+    for(let i=0;i<nForRR/2;i++){
+      const a=arr[i], b=arr[nForRR-1-i];
+      if(a!=='__bye__'&&b!=='__bye__') day.push({a,b});
+    }
+    // Rotation
+    rotating.push(rotating.shift());
+    rounds.push(day);
   }
-  allPairs.sort((a,b)=>a.priority-b.priority);
 
-  // Assign matches: each player gets exactly actualOpp matches
-  const matchCount={};players.forEach(p=>{matchCount[p.name]=0;});
-  const matches=[];
-  for(const pair of allPairs){
-    if(matchCount[pair.p1]>=actualOpp||matchCount[pair.p2]>=actualOpp) continue;
-    matches.push({p1:pair.p1,p2:pair.p2,score1:null,score2:null,played:false,sameHat:pair.sameHat});
-    matchCount[pair.p1]++;matchCount[pair.p2]++;
+  // ── Trier les journées : différents chapeaux et établissements en premier ──
+  function dayScore(day){
+    return day.reduce((sum,{a,b})=>{
+      const pi=players.find(p=>p.name===a), pj=players.find(p=>p.name===b);
+      const sameHat=(playerHat[a]&&playerHat[b]&&playerHat[a]===playerHat[b]&&playerHat[a]<=nHats);
+      const sameEtab=!!(pi?.etablissement&&pi.etablissement===pj?.etablissement);
+      return sum+(sameHat?100:0)+(sameEtab?50:0);
+    },0)+Math.random()*5; // léger shuffle
+  }
+  rounds.sort((a,b)=>dayScore(a)-dayScore(b));
+
+  // ── Prendre les actualOpp premières journées ──
+  const selectedMatches=[];
+  const matchCount={};
+  players.forEach(p=>{matchCount[p.name]=0;});
+
+  for(const day of rounds){
+    if(Object.values(matchCount).every(c=>c>=actualOpp)) break;
+    for(const {a,b} of day){
+      if(matchCount[a]>=actualOpp||matchCount[b]>=actualOpp) continue;
+      selectedMatches.push({p1:a,p2:b,score1:null,score2:null,played:false,
+        sameHat:!!(playerHat[a]&&playerHat[b]&&playerHat[a]===playerHat[b]&&playerHat[a]<=nHats)});
+      matchCount[a]++;matchCount[b]++;
+    }
+    if(Object.values(matchCount).every(c=>c>=actualOpp)) break;
   }
 
-  // Single "poule" containing all players and all matches
-  const poule={
-    name:'Ligue',
-    players:players.map(p=>p.name),
-    matches,
-    isLigue:true
-  };
+  const poule={name:'Ligue',players:players.map(p=>p.name),matches:selectedMatches,isLigue:true};
 
-  // Track etab conflicts for toast
+  // Stats manquants
+  const missingMatches=players.filter(p=>matchCount[p.name]<actualOpp);
   const etabConflicts=[];
-  const ec={};
-  players.forEach(p=>{if(p.etablissement)ec[p.etablissement]=(ec[p.etablissement]||0)+1;});
-  // In ligue mode etab separation is done by priority not strict — note if any same-etab match exists
-  if(matches.some(m=>m.sameEtab)) etabConflicts.push('Certains matchs opposent des joueurs du même établissement');
+  if(missingMatches.length>0){
+    const missing=missingMatches.map(p=>`${p.name} (${matchCount[p.name]}/${actualOpp})`).join(', ');
+    etabConflicts.push(`Matchs manquants : ${missing}`);
+  }
+  if(selectedMatches.some(m=>{
+    const pi=players.find(x=>x.name===m.p1), pj=players.find(x=>x.name===m.p2);
+    return pi?.etablissement&&pi.etablissement===pj?.etablissement;
+  })) etabConflicts.push('Certains matchs opposent des joueurs du même établissement (inévitable)');
 
-  return{name:phaseName,poules:[poule],completed:false,etabConflicts,isLigue:true,playerHat};
+  return{name:phaseName,poules:[poule],completed:false,etabConflicts,isLigue:true,playerHat,
+    matchCount,targetOpp:actualOpp,missingMatches};
 }
 
 // ══════════════════════════════════════════════════════
@@ -911,21 +1033,17 @@ function buildLiguePhase(playerObjects, opponentsPerPlayer, nSeeds, phaseName){
 function startConsolantePhase(nonQualifiedPlayers, config){
   const t=T();if(!t)return;
   if(config.type==='bracket'){
-    // Build a bracket for consolation players
     const names=nonQualifiedPlayers.map(p=>p.name||p);
-    const consolBracket=createBracket(names,[],false,false,false);
-    t.consolanteBracket=consolBracket;
+    t.consolanteBracket=createBracket(names,[],false,false,false);
     t.consolantePhase=null;
   } else if(config.type==='poules'){
     const nP=config.numPoules||2;
     const names=nonQualifiedPlayers.map(p=>p.name||p);
     const playerObjs=names.map(nm=>t.players.find(p=>p.name===nm)||{name:nm,etablissement:''});
-    const phase=buildPoulePhase(playerObjs,nP,'Consolante');
-    t.consolantePhase=phase;
+    t.consolantePhase=buildPoulePhase(playerObjs,nP,'Consolante');
     t.consolanteBracket=null;
   }
-  renderConsolante();
-  showTab('elimination');
+  // Don't call showTab here — caller decides which tab to show
 }
 
 // ══════════════════════════════════════════════════════
@@ -971,9 +1089,41 @@ function rrMatches(players){
 // ══════════════════════════════════════════════════════
 //  RENDER POULES
 // ══════════════════════════════════════════════════════
+let currentPoulePhaseIdx=-1; // -1 = always show last phase
+
+function switchPoulePhase(idx){
+  currentPoulePhaseIdx=idx;
+  renderPoules();
+}
+
 function renderPoules(){
   const t=T();if(!t)return;
-  const phase=t.poulePhases[t.poulePhases.length-1];if(!phase)return;
+  if(!t.poulePhases.length)return;
+
+  // Determine which phase to show
+  const phaseCount=t.poulePhases.length;
+  const phaseIdx=(currentPoulePhaseIdx>=0&&currentPoulePhaseIdx<phaseCount)
+    ? currentPoulePhaseIdx
+    : phaseCount-1;
+
+  // Phase selector chips (only if multiple phases)
+  const selector=document.getElementById('phase-selector');
+  if(selector){
+    if(phaseCount>1){
+      selector.innerHTML=t.poulePhases.map((ph,i)=>{
+        const allM=ph.poules.flatMap(p=>p.matches);
+        const played=allM.filter(m=>m.played).length;
+        const isActive=(i===phaseIdx);
+        return`<div class="t-chip ${isActive?'active':''}" onclick="switchPoulePhase(${i})" style="font-size:.72rem;padding:5px 11px">
+          ${ph.name} <span style="opacity:.6">${played}/${allM.length}</span>
+        </div>`;
+      }).join('');
+    } else {
+      selector.innerHTML='';
+    }
+  }
+
+  const phase=t.poulePhases[phaseIdx];
   const allM=phase.poules.flatMap(p=>p.matches);
   const played=allM.filter(m=>m.played).length,total=allM.length;
 
@@ -985,12 +1135,10 @@ function renderPoules(){
     <div class="stat-item"><div class="stat-val">${total-played}</div><div class="stat-lbl">Restants</div></div>
     <div class="stat-item"><div class="stat-val">${Math.round(played/total*100)||0}%</div><div class="stat-lbl">Avancement</div></div>`;
 
-  const phI=t.poulePhases.length-1;
-
   if(phase.isLigue){
-    renderLiguePhase(phase, phI, t);
+    renderLiguePhase(phase, phaseIdx, t);
   } else {
-    renderClassicPoules(phase, phI, t);
+    renderClassicPoules(phase, phaseIdx, t);
   }
 }
 
@@ -1201,7 +1349,9 @@ function renderClassement(){
 // ══════════════════════════════════════════════════════
 function checkPoulesComplete(){
   const t=T();if(!t)return;
-  const all=t.poulePhases[t.poulePhases.length-1].poules.flatMap(p=>p.matches);
+  const phaseCount=t.poulePhases.length;
+  const phaseIdx=(currentPoulePhaseIdx>=0&&currentPoulePhaseIdx<phaseCount)?currentPoulePhaseIdx:phaseCount-1;
+  const all=t.poulePhases[phaseIdx].poules.flatMap(p=>p.matches);
   const done=all.filter(m=>m.played).length;
   if(done<all.length) toast(`${all.length-done} matchs restants`,'#f0c040');
   else toast('Tous les matchs sont joués ! ✅','#3ecf8e');
@@ -1331,7 +1481,7 @@ function getNonQualified(qualNames){
   return phase.poules.flatMap(p=>p.players).filter(nm=>!qualNames.includes(nm));
 }
 
-// POULES path transition
+// POULES path transition — uses a dedicated "Phase 2" tab to avoid overwriting existing results
 function applyTransition(){
   const t=T();if(!t)return;
   const isPoules=document.getElementById('opt-poules').classList.contains('selected');
@@ -1341,7 +1491,7 @@ function applyTransition(){
   const qualified=getQualified(nQ);
   const phaseName=`Phase ${t.poulePhases.length+1}`;
   const phase=buildPoulePhase(qualified,nP,phaseName);
-  t.poulePhases.push(phase);
+  t.poulePhases.push(phase);  // PUSH, not replace — preserves previous phases
 
   // Handle consolante for eliminated players
   const consolType=document.querySelector('input[name="trans-consol-type"]:checked')?.value||'none';
@@ -1353,45 +1503,120 @@ function applyTransition(){
     startConsolantePhase(nonQObjs,{type:consolType,numPoules:consolNumPoules});
   }
 
-  closeTransitionModal(); renderPoules(); showTab('poules');
+  // Show phase2 tab with the new phase
+  document.getElementById('tab-btn-phase2').classList.remove('hidden');
+  document.getElementById('tab-btn-phase2').querySelector('.tab-label').textContent=phaseName;
+  document.getElementById('tab-btn-phase2').querySelector('.tab-icon').textContent='◈◈';
+
+  closeTransitionModal();
+  renderPhase2();
+  showTab('phase2');
+
   if(phase.etabConflicts?.length) setTimeout(()=>toast(`⚠ Conflits : ${phase.etabConflicts.join(' · ')}`,`#f0c040`),300);
-  else toast(`${phaseName} lancée avec ${qualified.length} qualifiés !${consolType!=='none'&&nonQObjs.length>1?` · ${nonQObjs.length} éliminés en consolante`:''} ⚡`);
+  else toast(`${phaseName} lancée avec ${qualified.length} qualifiés !${consolType!=='none'&&nonQObjs.length>1?` · ${nonQObjs.length} éliminés en consolante (onglet Élimination)`:''} ⚡`);
+}
+
+function renderPhase2(){
+  const t=T();if(!t)return;
+  const container=document.getElementById('phase2-container');
+  // Show the latest phase (not the first one)
+  if(t.poulePhases.length<2){container.innerHTML='<div class="alert alert-warn">Pas de phase 2 active.</div>';return;}
+
+  // Build a mini-render of the latest phase
+  const phase=t.poulePhases[t.poulePhases.length-1];
+  const phI=t.poulePhases.length-1;
+  const allM=phase.poules.flatMap(p=>p.matches);
+  const played=allM.filter(m=>m.played).length;
+
+  let html=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;flex-wrap:wrap;gap:8px">
+    <div>
+      <div class="section-title"><span>${phase.name}</span></div>
+      <div class="section-sub">${phase.isLigue?'Mode Ligue':'Poules'} · Cliquez sur un match pour saisir le score</div>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="checkPoulesComplete()">Vérifier avancement</button>
+      <button class="btn btn-primary btn-sm" onclick="showPhaseTransition()">Phase suivante →</button>
+    </div>
+  </div>
+  <div class="status-bar">
+    <div class="stat-item"><div class="stat-val">${phase.poules.length}</div><div class="stat-lbl">Poules</div></div>
+    <div class="stat-item"><div class="stat-val">${phase.poules.reduce((a,p)=>a+p.players.length,0)}</div><div class="stat-lbl">Joueurs</div></div>
+    <div class="stat-item"><div class="stat-val">${played}/${allM.length}</div><div class="stat-lbl">Matchs joués</div></div>
+    <div class="stat-item"><div class="stat-val">${allM.length-played}</div><div class="stat-lbl">Restants</div></div>
+    <div class="stat-item"><div class="stat-val">${Math.round(played/allM.length*100)||0}%</div><div class="stat-lbl">Avancement</div></div>
+  </div>`;
+
+  if(phase.isLigue){
+    // Reuse ligue renderer
+    const tmpPhI=phI;
+    container.innerHTML=html;
+    renderLiguePhase(phase,tmpPhI,t);
+    // Prepend the header
+    document.getElementById('phase2-container').innerHTML=html+document.getElementById('phase2-container').innerHTML;
+    return;
+  }
+
+  // Classic poules for phase2
+  html+=phase.poules.map((po,pi)=>{
+    const st=pouleSt(po,t);
+    const mHTML=po.matches.map((m,mi)=>{
+      const p1w=m.played&&m.score1>m.score2,p2w=m.played&&m.score2>m.score1;
+      return`<div class="match-row ${m.played?'done':''}" onclick="openScoreModalPhase2(${phI},${pi},${mi})">
+        <div class="match-player ${m.played?(p1w?'win':''):''}">${m.p1}</div>
+        <div class="match-vs">vs</div>
+        <div class="match-player right ${m.played?(p2w?'win':''):''}">${m.p2}</div>
+        ${m.played?`<div class="match-result">${m.score1} – ${m.score2}</div>`:`<div class="match-result" style="color:var(--accent);font-size:.72rem">▶</div>`}
+      </div>`;}).join('');
+    const sHTML=`<table><thead><tr><th>#</th><th>Joueur</th><th>J</th><th>V</th><th>N</th><th>D</th><th>BP</th><th>BC</th><th>Pts</th></tr></thead><tbody>
+      ${st.map((s,i)=>`<tr><td><span class="rank-num ${i<3?'rank-'+(i+1):''}">${i+1}</span></td><td>${s.name}</td><td>${s.j}</td><td>${s.w}</td><td>${s.d}</td><td>${s.l}</td><td>${s.gf}</td><td>${s.ga}</td><td><span class="pts">${s.pts}</span></td></tr>`).join('')}
+    </tbody></table>`;
+    return`<div class="poule-card">
+      <div class="poule-header"><div class="poule-name">${po.name}</div><span style="color:var(--muted);font-size:.75rem">${po.matches.filter(m=>m.played).length}/${po.matches.length}</span></div>
+      <div class="grid-2" style="padding:12px;gap:12px">
+        <div><div class="card-title" style="margin-bottom:6px">Matchs</div>${mHTML}</div>
+        <div><div class="card-title" style="margin-bottom:6px">Classement</div>${sHTML}</div>
+      </div>
+    </div>`;}).join('');
+
+  container.innerHTML=html;
+}
+
+// Score modal for phase2 tab (uses same modal but routes to correct phase)
+function openScoreModalPhase2(phI,poI,mI){
+  openScoreModal(phI,poI,mI);
 }
 
 // ══════════════════════════════════════════════════════
-//  BRACKET ENGINE  (double-elim conforme au schéma)
+//  BRACKET ENGINE  — réécriture propre
 // ══════════════════════════════════════════════════════
 /*
-  Structure double-élimination (schéma joint) :
+  Pour N joueurs, le WB a log2(slots) rounds.
+  Exemple avec 8 joueurs (slots=8) :
+    WBR0 : 4 matchs (R1, 4 gagnants, 4 perdants)
+    WBR1 : 2 matchs (QF, 2 gagnants, 2 perdants)
+    WBR2 : 1 match  (SF, 1 gagnant, 1 perdant)
+    WBR3 : 1 match  (Finale WB)
 
-  WB (Tour principal, côté gagnants)
-  ────────────────────────────────────
-  WBR0  : matchs 1er tour  (byes auto-avancent)
-  WBR1  : quarts de finale
-  WBR2  : demi-finales
-  WBR3  : finale WB
+  LB avec double-élim (8 joueurs) :
+    LBR0 : 2 matchs  — 4 perdants WBR0 jouent entre eux (2 gagnants)
+    LBR1 : 2 matchs  — 2 perdants WBR1 (p1) vs 2 gagnants LBR0 (p2)  [drop]
+    LBR2 : 1 match   — 2 gagnants LBR1 jouent entre eux               [consol]
+    LBR3 : 1 match   — 1 perdant WBR2 (p1) vs 1 gagnant LBR2 (p2)    [drop]
+    LBR4 : 1 match   — finale LB                                       [consol/finale]
 
-  LB (Tour de consolation, côté perdants)
-  ────────────────────────────────────────
-  LBR0  : perdants WBR0 + consolante → jouent entre eux
-           Chaque match LBR0 est un vrai match (jamais auto-avancé)
-  LBR1  : perdants WBR1  VS  gagnants LBR0   (drop round)
-  LBR2  : gagnants LBR1 jouent entre eux      (consolidation)
-  LBR3  : perdants WBR2  VS  gagnants LBR2    (drop round)
-  LBR4  : gagnants LBR3 jouent entre eux      (consolidation)
-  …
-  LBR(2k-1)  : drop
-  LBR(2k)    : consol
-  Finale LB  : dernier match LB
+  Formule exacte :
+    LBR0  : N_WBR0_losers / 2  matchs
+    LBR1  : N_WBR1_losers       matchs  (= LBR0 winners)
+    LBR2  : LBR1 / 2            matchs
+    LBR3  : N_WBR2_losers       matchs  (= LBR2 winners)
+    ...
 
-  Règle absolue : AUCUN match (WB ou LB) n'est jamais auto-avancé
-  sauf les vrais byes du WBR0 (un joueur vs case vide).
-  Tous les autres slots sont remplis uniquement par propagate().
+  TOUTES les cases sont vides à la construction.
+  propagate() injecte les joueurs après chaque score.
 */
 
 function np2(n){let p=1;while(p<n)p*=2;return p;}
 
-// Ordre de seeding standard : seed 1 vs seed 2 uniquement en finale
 function seedOrd(sz){
   if(sz===1)return[1];
   const h=sz/2,top=seedOrd(h),r=[];
@@ -1399,58 +1624,53 @@ function seedOrd(sz){
   return r;
 }
 
-/* Crée un match vide (les slots p1/p2 seront remplis par propagate)
-   isBye=true seulement si c'est un vrai bye du WBR0 (case jamais remplie) */
 function emptyMatch(opts={}){
   return{p1:null,p2:null,score1:null,score2:null,
-    played:false,winner:null,loser:null,
-    isBye:false,...opts};
+    played:false,winner:null,loser:null,isBye:false,...opts};
 }
 
 // ── WINNER BRACKET ──────────────────────────────────
 function buildWB(players){
-  const n=players.length, slots=np2(n), order=seedOrd(slots);
-  const s2p={};players.forEach((nm,i)=>s2p[i+1]=nm);
+  const n=players.length, slots=np2(n);
+  const order=seedOrd(slots);
+  const s2p={};
+  players.forEach((nm,i)=>s2p[i+1]=nm);
 
-  // WBR0 : appariements seedés
+  // Round 0 : appariements seedés, byes auto-avancés
   const r0=[];
   for(let i=0;i<slots;i+=2){
     const s1=order[i]<=n?order[i]:null;
     const s2=order[i+1]<=n?order[i+1]:null;
-    const p1=s1?s2p[s1]:null, p2=s2?s2p[s2]:null;
+    const p1=s1?s2p[s1]:null;
+    const p2=s2?s2p[s2]:null;
     const m=emptyMatch({p1,p2,seed1:s1,seed2:s2});
-    // Vrai bye WBR0 : un seul joueur présent
-    if(p1&&!p2){m.winner=p1;m.loser=null;m.played=true;m.score1=0;m.score2=0;m.isBye=true;}
-    else if(!p1&&p2){m.winner=p2;m.loser=null;m.played=true;m.score1=0;m.score2=0;m.isBye=true;}
+    if(p1&&!p2){m.winner=p1;m.loser=null;m.played=true;m.isBye=true;}
+    else if(!p1&&p2){m.winner=p2;m.loser=null;m.played=true;m.isBye=true;}
     else if(!p1&&!p2){m.played=true;m.isBye=true;}
     r0.push(m);
   }
 
-  // WBR1…WBRfinal : coquilles vides
+  // Rounds suivants : coquilles vides
   const rounds=[r0];
   let prev=r0;
   while(prev.length>1){
     const next=[];
     for(let i=0;i<prev.length;i+=2)
-      next.push(emptyMatch({fromW:[i,i+1]}));
-    rounds.push(next);prev=next;
+      next.push(emptyMatch());
+    rounds.push(next);
+    prev=next;
   }
 
-  // Propager les byes WBR0 dans WBR1 (seulement eux)
+  // Propager les byes R0 → R1 immédiatement
   if(rounds.length>1){
     r0.forEach((m,mi)=>{
       if(!m.isBye||!m.winner)return;
       const ni=Math.floor(mi/2), sl=mi%2===0?'p1':'p2';
-      rounds[1][ni][sl]=m.winner;
-      // NE PAS marquer le match WBR1 comme joué ici —
-      // l'autre slot viendra d'un vrai match ou d'un autre bye
+      if(!rounds[1][ni][sl]) rounds[1][ni][sl]=m.winner;
     });
-    // Si les DEUX slots d'un match WBR1 sont des byes on les marque
+    // Si les deux slots d'un match R1 viennent de byes → bye chain
     rounds[1].forEach(m=>{
-      if(m.p1&&m.p2&&!m.played&&m.p1===m.p1){
-        // deux byes vs bye → cas théorique très rare (ex: 2 joueurs pour 4 slots)
-        // on laisse propagate gérer
-      }
+      if(m.p1&&m.p2&&!m.played&&!m.winner){/* sera joué normalement */}
     });
   }
   return rounds;
@@ -1458,56 +1678,57 @@ function buildWB(players){
 
 // ── LOSER BRACKET ────────────────────────────────────
 /*
-  Structure par WB round (wbRi = index du round WB qui perd des joueurs) :
+  On calcule précisément le nombre de matchs par round LB.
 
-  wbRi=0  → LBR0  : perdants WBR0 + consolante jouent entre eux
-  wbRi=1  → LBR1  : drop  (perdants WBR1 vs gagnants LBR0)
-              LBR2  : consol (gagnants LBR1 entre eux)
-  wbRi=2  → LBR3  : drop  (perdants WBR2 vs gagnants LBR2)
-              LBR4  : consol
-  …
-
-  Index LB du drop round pour wbRi ≥ 1 : 2*wbRi - 1
-  Index LB du consol round             : 2*wbRi
-
-  RÈGLE : aucun match LB n'est créé avec des joueurs déjà connus —
-          tous les slots (p1,p2) restent null à la construction.
-          Les joueurs sont injectés par propagate() uniquement.
+  wbR0 a  wbR0n  vrais matchs  → wbR0n   perdants → LBR0 a wbR0n/2 matchs
+  wbR1 a  wbR0n/2 matchs       → wbR0n/2 perdants → LBR1 a wbR0n/2 matchs (drop)
+                                                       LBR2 a wbR0n/4 matchs (consol)
+  wbR2 a  wbR0n/4 matchs       → wbR0n/4 perdants → LBR3 a wbR0n/4 matchs (drop)
+                                                       LBR4 a wbR0n/8 matchs (consol)
+  ...jusqu'à 1 match (finale LB)
 */
 function buildLB(wbRounds, consolPlayers){
   const lbRounds=[];
-  const nWBR=wbRounds.length; // inclut la finale WB
 
-  /* ── LBR0 ── */
-  // Nombre de matchs = moitié du nombre de perdants WBR0 + consolante
-  // On ne connaît pas encore les perdants WBR0 (ils seront envoyés par propagate)
-  // On crée le bon nombre de cases vides.
-  const wbR0Matches=wbRounds[0].filter(m=>!m.isBye).length; // vrais matchs WBR0
-  const totalLBR0=(wbR0Matches + (consolPlayers?.length||0));
-  const lbr0Count=Math.ceil(totalLBR0/2); // nb de matchs LBR0
-  const lbr0=Array.from({length:lbr0Count},()=>emptyMatch({isLB:true,isLBR0:true}));
+  // Nombre de vrais matchs WBR0 (pas les byes)
+  const wbR0Real=wbRounds[0].filter(m=>!m.isBye).length;
+
+  if(wbR0Real===0&&(!consolPlayers||consolPlayers.length===0)) return lbRounds;
+
+  // LBR0 : perdants WBR0 + éventuels joueurs consolante jouent entre eux
+  // Nombre total de joueurs entrant dans LBR0 = wbR0Real + consolPlayers.length
+  // (les byes WBR0 n'ont pas de perdant)
+  const lbr0Players=wbR0Real+(consolPlayers?.length||0);
+  const lbr0Count=Math.ceil(lbr0Players/2); // matchs LBR0
+  if(lbr0Count<1) return lbRounds;
+
+  const lbr0=Array.from({length:lbr0Count},()=>emptyMatch({isLBR0:true}));
   lbRounds.push(lbr0);
 
-  /* ── Drop + Consol pour chaque WB round suivant ── */
-  let prevLB=lbr0;
-  for(let wbRi=1;wbRi<nWBR-1;wbRi++){
-    // Nombre de perdants WB à ce tour
-    const wbLosersCount=wbRounds[wbRi].length; // = nb de matchs WB à ce tour
-    // Nombre de gagnants LB dispo = prevLB.length
-    const dropCount=Math.max(wbLosersCount, prevLB.length);
-    const dropR=Array.from({length:dropCount},()=>emptyMatch({isLB:true,isDrop:true}));
+  // Construction des rounds drop+consol pour WBR1, WBR2, ...
+  // wbRi losers → drop round, puis consol round, jusqu'à finale LB
+  let prevLBCount=lbr0Count; // nb de matchs du dernier round LB
+
+  for(let wbRi=1;wbRi<wbRounds.length-1;wbRi++){
+    const wbLosersCount=wbRounds[wbRi].length; // nb perdants WB ce tour
+    // Le drop round a autant de matchs que de perdants WB
+    // Chaque match : p1=perdant WB, p2=survivant LB précédent
+    // (il doit y avoir autant de survivants LB que de perdants WB)
+    const dropCount=wbLosersCount;
+    const dropR=Array.from({length:dropCount},()=>emptyMatch({isDrop:true}));
     lbRounds.push(dropR);
 
-    // Consol : gagnants du drop jouent entre eux
+    // Consol : les gagnants du drop jouent entre eux
     const consolCount=Math.ceil(dropCount/2);
     if(consolCount>=1){
-      const consR=Array.from({length:consolCount},()=>emptyMatch({isLB:true,isConsol:true}));
+      const consR=Array.from({length:consolCount},()=>emptyMatch({isConsol:true}));
       lbRounds.push(consR);
-      prevLB=consR;
+      prevLBCount=consolCount;
     } else {
-      prevLB=dropR;
+      prevLBCount=dropCount;
     }
   }
+
   return lbRounds;
 }
 
@@ -1516,113 +1737,124 @@ function createBracket(wbPlayers,consolPlayers=[],isDbl=false,merge=false,consol
   let lbRounds=[],grandFinal=null;
   if(isDbl){
     lbRounds=buildLB(wbRounds, consolante?consolPlayers:[]);
-    if(merge) grandFinal=emptyMatch({isGF:true});
+    if(merge||consolante) grandFinal=emptyMatch({isGF:true});
+    // Immediately inject consolPlayers into LBR0 (they're known at creation time)
+    if(consolante&&consolPlayers.length&&lbRounds.length){
+      // Shuffle consolPlayers for fairness
+      const shuffled=[...consolPlayers].sort(()=>Math.random()-0.5);
+      const b={lbRounds}; // temp obj for injection
+      shuffled.forEach(nm=>_injectLBR0(b,nm));
+    }
   }
-  return{wbRounds,lbRounds,grandFinal,isDbl,merge,consolante,
+  return{wbRounds,lbRounds,grandFinal,isDbl,
+    merge:merge||(isDbl&&consolante),
+    consolante,
     players:wbPlayers,consolPlayers,
-    slots:np2(wbPlayers.length),byes:np2(wbPlayers.length)-wbPlayers.length};
+    slots:np2(wbPlayers.length),
+    byes:np2(wbPlayers.length)-wbPlayers.length};
 }
 
 // ══════════════════════════════════════════════════════
-//  PROPAGATE  (injecte les joueurs après chaque score)
+//  PROPAGATE
 // ══════════════════════════════════════════════════════
-/*
-  Appelé après CHAQUE score saisi. Parcourt tout le bracket
-  et remplit les slots vides dès qu'un vainqueur/perdant est connu.
-  Ne marque jamais un match comme joué sauf s'il est vraiment un bye.
-*/
 function propagate(){
   const b=T()?.bracket;if(!b)return;
+  _propagateBracketObj(b);
+}
+
+function _propagateBracketObj(b){
+  if(!b)return;
   const{wbRounds,lbRounds,grandFinal,isDbl,merge}=b;
 
-  // ── WB : gagnants avancent ──
+  // ── 1. WB : gagnants avancent ──
   wbRounds.forEach((round,ri)=>{
     round.forEach((m,mi)=>{
       if(!m.winner)return;
       const nR=wbRounds[ri+1];if(!nR)return;
-      const ni=Math.floor(mi/2),sl=mi%2===0?'p1':'p2';
+      const ni=Math.floor(mi/2), sl=mi%2===0?'p1':'p2';
       if(!nR[ni][sl]) nR[ni][sl]=m.winner;
-      // Jamais d'auto-avancement du match suivant ici
     });
   });
 
-  if(!isDbl)return;
+  if(!isDbl||!lbRounds.length)return;
 
-  // ── WB → LB : perdants descendent ──
+  // ── 2. WB → LB : perdants injectés ──
   wbRounds.forEach((round,wbRi)=>{
     round.forEach((m,mi)=>{
       if(m.isBye||!m.loser)return;
-
       if(wbRi===0){
-        // Perdants WBR0 + consolante → LBR0
-        // On les place dans les cases LBR0 dans l'ordre
-        injectIntoLBR0(b, m.loser);
+        // LBR0 : trouver un slot libre (p1 puis p2)
+        _injectLBR0(b,m.loser);
       } else {
-        // Perdants WBRi (i≥1) → drop round LBR(2i-1)
+        // Drop round pour ce tour WB = LB index 2*wbRi-1
         const dropIdx=2*wbRi-1;
-        if(dropIdx<lbRounds.length){
-          injectDropLoser(lbRounds[dropIdx], m.loser);
-        }
+        const dropR=lbRounds[dropIdx];
+        if(dropR) _injectDrop(dropR,mi,m.loser);
       }
     });
   });
 
-  // Consolante : joueurs non-qualifiés → LBR0
-  if(b.consolante&&b.consolPlayers){
-    b.consolPlayers.forEach(name=>{
-      injectIntoLBR0(b, name);
-    });
-  }
+  // Consolante players → LBR0 (mode mixte) — already injected at createBracket time, skip
+  // if(b.consolante&&b.consolPlayers){ ... } // removed — injection done at creation
 
-  // ── LB : gagnants avancent dans le round suivant ──
+  // ── 3. LB : gagnants avancent ──
   lbRounds.forEach((round,ri)=>{
     round.forEach((m,mi)=>{
       if(!m.winner)return;
       const nR=lbRounds[ri+1];if(!nR)return;
       if(nR[0]?.isDrop){
-        // Next = drop round : le gagnant LB va en p2
+        // Drop round : gagnants LB → p2 (indexé par position)
         if(mi<nR.length&&!nR[mi].p2) nR[mi].p2=m.winner;
       } else {
-        // Next = consol round : appariement deux par deux
-        const ni=Math.floor(mi/2),sl=mi%2===0?'p1':'p2';
+        // Consol round : pairing 2 par 2
+        const ni=Math.floor(mi/2), sl=mi%2===0?'p1':'p2';
         if(ni<nR.length&&!nR[ni][sl]) nR[ni][sl]=m.winner;
       }
     });
   });
 
-  // ── Grande Finale ──
-  if(merge&&grandFinal){
-    const wbFW=wbRounds[wbRounds.length-1][0]?.winner;
-    const lbFW=lbRounds.length?lbRounds[lbRounds.length-1][0]?.winner:null;
-    if(wbFW&&!grandFinal.p1) grandFinal.p1=wbFW;
-    if(lbFW&&!grandFinal.p2) grandFinal.p2=lbFW;
+  // ── 4. Grande Finale ──
+  if((merge||b.merge)&&grandFinal){
+    const wbFin=wbRounds[wbRounds.length-1][0];
+    const lbFin=lbRounds[lbRounds.length-1]?.[0];
+    if(wbFin?.winner&&!grandFinal.p1) grandFinal.p1=wbFin.winner;
+    if(lbFin?.winner&&!grandFinal.p2) grandFinal.p2=lbFin.winner;
   }
 }
 
-/* Place un perdant WBR0 ou joueur consolante dans LBR0.
-   On cherche la première case p1 vide, puis la première case p2 vide. */
-function injectIntoLBR0(b,name){
+// Injecter dans LBR0 : p1 puis p2, en évitant les doublons
+function _injectLBR0(b,name){
   if(!name)return;
   const lbr0=b.lbRounds[0];if(!lbr0)return;
-  // Ne pas insérer en double
-  for(const m of lbr0){
-    if(m.p1===name||m.p2===name)return;
-  }
+  for(const m of lbr0){if(m.p1===name||m.p2===name)return;}
   for(const m of lbr0){
     if(!m.p1){m.p1=name;return;}
     if(!m.p2){m.p2=name;return;}
   }
 }
 
-/* Place un perdant WBRi dans un slot p1 libre du drop round. */
+// Injecter perdant WBRi dans le drop round : p1 indexé par mi
+// Les WB losers occupent les p1 dans l'ordre de leur match WB
+function _injectDrop(dropRound,mi,name){
+  if(!name)return;
+  for(const m of dropRound){if(m.p1===name||m.p2===name)return;}
+  // On cible le match de même index que le match WB
+  if(mi<dropRound.length&&!dropRound[mi].p1){
+    dropRound[mi].p1=name;return;
+  }
+  // Fallback : premier p1 libre
+  for(const m of dropRound){if(!m.p1){m.p1=name;return;}}
+}
+
+// Generic propagate (consolante bracket)
+function propagateBracket(b){_propagateBracketObj(b);}
+
+// Alias pour compatibilité
+function injectIntoLBR0(b,name){_injectLBR0(b,name);}
 function injectDropLoser(dropRound,name){
   if(!name)return;
-  for(const m of dropRound){
-    if(m.p1===name||m.p2===name)return; // déjà présent
-  }
-  for(const m of dropRound){
-    if(!m.p1){m.p1=name;return;}
-  }
+  for(const m of dropRound){if(m.p1===name||m.p2===name)return;}
+  for(const m of dropRound){if(!m.p1){m.p1=name;return;}}
 }
 
 // ══════════════════════════════════════════════════════
@@ -2174,7 +2406,8 @@ function confirmSeeding(){
   const isMixed=nonQNames&&nonQNames.length>0&&isDbl;
   const consolPlayersForLB=isMixed?nonQNames:[];
 
-  t.bracket=createBracket(orderedNames,consolPlayersForLB,isDbl,merge,false);
+  // consolante=true tells createBracket/buildLB to include consolPlayersForLB in LBR0
+  t.bracket=createBracket(orderedNames, consolPlayersForLB, isDbl, merge||isMixed, isMixed);
   t.currentPhase='elimination';t.history=[];
   const modeLabel=isMixed?'DOUBLE ÉLIM. MIXTE':isDbl?'DOUBLE ÉLIMINATION':'ÉLIMINATION DIRECTE';
   document.getElementById('phase-label').textContent=modeLabel;
@@ -2239,6 +2472,478 @@ function loadState(){
   }catch(e){console.warn('Load failed:',e);}
   return false;
 }
+
+// ══════════════════════════════════════════════════════
+//  INTERCLUB ENGINE
+// ══════════════════════════════════════════════════════
+
+// Default match types for badminton
+const IC_DEFAULT_MATCH_TYPES=[
+  {label:'Simple Homme',short:'SH'},
+  {label:'Simple Dame',short:'SD'},
+  {label:'Double Homme',short:'DH'},
+  {label:'Double Dame',short:'DD'},
+  {label:'Double Mixte',short:'DX'},
+];
+
+let icMatchTypes=[...IC_DEFAULT_MATCH_TYPES];
+
+function initInterclubMatchTypes(){
+  icMatchTypes=[...IC_DEFAULT_MATCH_TYPES];
+  renderInterclubMatchTypes();
+}
+
+function renderInterclubMatchTypes(){
+  const c=document.getElementById('ic-match-types-container');
+  if(!c)return;
+  c.innerHTML=icMatchTypes.map((mt,i)=>`
+    <div class="player-row" style="margin-bottom:4px">
+      <span class="player-num">${i+1}</span>
+      <input type="text" value="${mt.label}" onblur="icMatchTypes[${i}].label=this.value" style="flex:2;min-width:80px;font-size:.85rem">
+      <input type="text" value="${mt.short}" onblur="icMatchTypes[${i}].short=this.value" maxlength="4" style="width:50px;font-size:.85rem;text-align:center">
+      <button class="btn btn-danger btn-sm" onclick="removeInterclubMatchType(${i})">✕</button>
+    </div>`).join('');
+}
+
+function addInterclubMatchType(){
+  icMatchTypes.push({label:`Match ${icMatchTypes.length+1}`,short:`M${icMatchTypes.length+1}`});
+  renderInterclubMatchTypes();
+}
+
+function removeInterclubMatchType(i){
+  icMatchTypes.splice(i,1);
+  renderInterclubMatchTypes();
+}
+
+function updateInterclubInfo(){
+  const nTeams=parseInt(document.getElementById('ic-num-teams')?.value)||4;
+  const nPoules=parseInt(document.getElementById('ic-num-poules')?.value)||1;
+  const el=document.getElementById('ic-info');if(!el)return;
+  const perPoule=Math.ceil(nTeams/nPoules);
+  const matchesPerPoule=perPoule*(perPoule-1)/2;
+  el.innerHTML=`✓ <strong>${nTeams}</strong> équipes · <strong>${nPoules}</strong> poule(s) · ~${perPoule} équipes/poule · ${matchesPerPoule} rencontres/poule · ${icMatchTypes.length} matchs/rencontre`;
+  el.className='alert alert-info';el.classList.remove('hidden');
+}
+
+// Start interclub tournament
+function startInterclubTournament(){
+  const t=T();if(!t)return;
+  const nTeams=parseInt(document.getElementById('ic-num-teams')?.value)||4;
+  const nPoules=parseInt(document.getElementById('ic-num-poules')?.value)||1;
+  const format=document.querySelector('input[name="ic-format"]:checked')?.value||'club';
+  const sets=parseInt(document.querySelector('input[name="ic-sets"]:checked')?.value||'1');
+  if(nTeams<2){toast('Minimum 2 équipes','#e05c3a');return;}
+
+  // Create team names
+  const teams=Array.from({length:nTeams},(_,i)=>({
+    name:`Équipe ${i+1}`,
+    id:`team_${i}`,
+  }));
+
+  // Distribute into poules (round-robin within each poule)
+  const poules=[];
+  for(let p=0;p<nPoules;p++){
+    const pouleTeams=teams.filter((_,i)=>i%nPoules===p);
+    const rencontres=[];
+    for(let i=0;i<pouleTeams.length;i++){
+      for(let j=i+1;j<pouleTeams.length;j++){
+        rencontres.push({
+          teamA:pouleTeams[i].id,
+          teamB:pouleTeams[j].id,
+          matches:icMatchTypes.map((mt,mi)=>({
+            type:mt.label,short:mt.short,
+            playersA:'',playersB:'',
+            sets:[{a:0,b:0},{a:0,b:0},{a:0,b:0}],
+            setsPlayed:0,
+            winner:null,played:false
+          })),
+          score:{a:0,b:0}, // nb matchs gagnés
+          points:{a:0,b:0}, // classement points
+          played:false
+        });
+      }
+    }
+    poules.push({name:`Poule ${String.fromCharCode(65+p)}`,teams:pouleTeams.map(t=>t.id),rencontres});
+  }
+
+  t.interclub={teams,poules,format,sets,matchTypes:[...icMatchTypes],started:true};
+  t.format='interclub';
+  t.currentPhase='interclub';
+  document.getElementById('phase-label').textContent='INTERCLUB';
+  document.getElementById('tab-btn-interclub').classList.remove('hidden');
+  showTab('interclub');
+  saveState();
+  toast(`Interclub lancé ! ${nTeams} équipes · ${nPoules} poule(s) · format ${format.toUpperCase()}`);
+}
+
+// ── RENDER INTERCLUB ──────────────────────────────────
+function renderInterclub(){
+  const t=T();if(!t||!t.interclub){
+    document.getElementById('interclub-container').innerHTML=`
+      <div class="section-title"><span>Interclub</span></div>
+      <div class="alert alert-info">Configurez et lancez un tournoi Interclub depuis l'onglet Paramètres.</div>`;
+    return;
+  }
+  const ic=t.interclub;
+  const {teams,poules,format,sets}=ic;
+
+  // Compute standings per poule
+  let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+    <div>
+      <div class="section-title"><span>Interclub</span></div>
+      <div class="section-sub">Format ${format==='unss'?'UNSS':'Club'} · ${sets===1?'1 set':'2 sets gagnants'} · ${ic.matchTypes.length} matchs/rencontre</div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="openIcTeamEditor()">✏️ Noms des équipes</button>
+  </div>`;
+
+  poules.forEach((poule,pi)=>{
+    const standings=icPouleStandings(poule,ic,t);
+    html+=`<div class="b-section-lbl"><span>${poule.name}</span></div>`;
+
+    // Standings table
+    html+=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:10px">
+      <table><thead><tr>
+        <th>#</th><th>Équipe</th><th>J</th><th>V</th><th>N</th><th>D</th>
+        <th>Pts matchs</th><th>Pts clt</th>
+        ${format==='club'?'<th>Bonus</th>':''}
+      </tr></thead><tbody>
+      ${standings.map((s,i)=>`<tr>
+        <td><span class="rank-num ${i<3?'rank-'+(i+1):''}">${i+1}</span></td>
+        <td><strong>${icTeamName(s.teamId,ic)}</strong></td>
+        <td>${s.j}</td><td>${s.v}</td><td>${s.n}</td><td>${s.d}</td>
+        <td style="color:var(--accent3)">${s.ptsMatchs}</td>
+        <td><span class="pts">${s.pts}</span></td>
+        ${format==='club'?`<td style="color:var(--muted);font-size:.8rem">${s.bonus>0?`+${s.bonus}`:''}</td>`:''}
+      </tr>`).join('')}
+      </tbody></table>
+    </div>`;
+
+    // Rencontres
+    html+=`<div class="grid-2" style="gap:10px;margin-bottom:20px">`;
+    poule.rencontres.forEach((r,ri)=>{
+      const tA=icTeamName(r.teamA,ic), tB=icTeamName(r.teamB,ic);
+      const totalPlayed=r.matches.filter(m=>m.played).length;
+      const total=r.matches.length;
+      const scoreStr=r.played?`<span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--accent)">${r.score.a} – ${r.score.b}</span>`
+        :`<span style="font-size:.75rem;color:var(--muted)">${totalPlayed}/${total} matchs</span>`;
+      html+=`<div class="poule-card" style="${r.played?'border-color:rgba(62,207,142,.3)':''}">
+        <div class="poule-header" style="${r.played?'background:rgba(62,207,142,.05)':''}">
+          <div style="font-weight:700;font-size:.88rem">${tA} <span style="color:var(--muted)">vs</span> ${tB}</div>
+          ${scoreStr}
+        </div>
+        ${r.matches.map((m,mi)=>{
+          const winA=m.played&&m.winner==='A', winB=m.played&&m.winner==='B';
+          const setStr=m.played?m.sets.slice(0,Math.max(m.setsPlayed,1)).map(s=>`${s.a}-${s.b}`).join(' / '):'';
+          return`<div class="match-row ${m.played?'done':''}" style="padding:10px 12px" onclick="openIcMatchModal(${pi},${ri},${mi})">
+            <div class="match-player ${winA?'win':''}" style="font-size:.82rem">${m.short||m.type}<br><span style="color:var(--muted);font-size:.7rem">${m.playersA||'—'}</span></div>
+            <div class="match-vs">vs</div>
+            <div class="match-player right ${winB?'win':''}" style="font-size:.82rem;text-align:left"><br><span style="color:var(--muted);font-size:.7rem">${m.playersB||'—'}</span></div>
+            ${m.played?`<div class="match-result" style="font-size:.8rem">${setStr}</div>`:`<div class="match-result" style="color:var(--accent);font-size:.72rem">▶</div>`}
+          </div>`;}).join('')}
+      </div>`;
+    });
+    html+=`</div>`;
+  });
+
+  document.getElementById('interclub-container').innerHTML=html;
+}
+
+function icTeamName(teamId,ic){
+  return ic.teams.find(t=>t.id===teamId)?.name||teamId;
+}
+
+function icPouleStandings(poule,ic,t){
+  const stats={};
+  poule.teams.forEach(tid=>{stats[tid]={teamId:tid,j:0,v:0,n:0,d:0,pts:0,ptsMatchs:0,bonus:0};});
+  poule.rencontres.forEach(r=>{
+    if(!r.played)return;
+    const sA=stats[r.teamA],sB=stats[r.teamB];
+    if(!sA||!sB)return;
+    sA.j++;sB.j++;
+    // Points matchs = total individual matches won
+    const mA=r.matches.filter(m=>m.played&&m.winner==='A').length;
+    const mB=r.matches.filter(m=>m.played&&m.winner==='B').length;
+    sA.ptsMatchs+=mA; sB.ptsMatchs+=mB;
+
+    if(ic.format==='unss'){
+      // UNSS: winner = more individual points (set scores); tie-break = more matches won
+      const totalA=r.matches.reduce((s,m)=>s+(m.played?m.sets.slice(0,m.setsPlayed).reduce((a,st)=>a+st.a,0):0),0);
+      const totalB=r.matches.reduce((s,m)=>s+(m.played?m.sets.slice(0,m.setsPlayed).reduce((a,st)=>a+st.b,0):0),0);
+      if(totalA>totalB||(totalA===totalB&&mA>mB)){sA.v++;sA.pts+=3;}
+      else if(totalB>totalA||(totalA===totalB&&mB>mA)){sB.v++;sB.pts+=3;}
+      else{sA.n++;sB.n++;sA.pts+=1;sB.pts+=1;}
+    } else {
+      // Club: winner = more matches won; draw possible
+      if(mA>mB){
+        sA.v++;sA.pts+=5;
+        if(mB===0){sA.bonus++;sA.pts+=1;} // victoire à 0 → bonus offensif
+        if(mB>0&&mA-mB<=2){sB.bonus++;sB.pts+=1;} // défaite par ≤2 → bonus défensif
+      } else if(mB>mA){
+        sB.v++;sB.pts+=5;
+        if(mA===0){sB.bonus++;sB.pts+=1;}
+        if(mA>0&&mB-mA<=2){sA.bonus++;sA.pts+=1;}
+      } else {
+        sA.n++;sB.n++;sA.pts+=3;sB.pts+=3;
+      }
+      sA.d=sA.j-sA.v-sA.n;sB.d=sB.j-sB.v-sB.n;
+    }
+  });
+  // Fix defeats count
+  Object.values(stats).forEach(s=>{s.d=Math.max(0,s.j-s.v-s.n);});
+  return Object.values(stats).sort((a,b)=>b.pts-a.pts||b.ptsMatchs-a.ptsMatchs);
+}
+
+// ── INTERCLUB MATCH MODAL ─────────────────────────────
+let curIcMatch=null;
+
+function openIcMatchModal(pi,ri,mi){
+  const t=T();if(!t?.interclub)return;
+  const ic=t.interclub;
+  const poule=ic.poules[pi];
+  const r=poule.rencontres[ri];
+  const m=r.matches[mi];
+  curIcMatch={pi,ri,mi};
+
+  const tA=icTeamName(r.teamA,ic), tB=icTeamName(r.teamB,ic);
+  document.getElementById('ic-modal-match-type').textContent=m.type;
+  document.getElementById('ic-modal-teams').textContent=`${tA} vs ${tB}`;
+  document.getElementById('ic-modal-players1').value=m.playersA||'';
+  document.getElementById('ic-modal-players2').value=m.playersB||'';
+
+  const nSets=ic.sets;
+  const setsContainer=document.getElementById('ic-sets-container');
+  let sHtml=`<div style="display:flex;flex-direction:column;gap:8px">`;
+  for(let s=0;s<(nSets===1?1:3);s++){
+    const setData=m.sets[s]||{a:0,b:0};
+    const isOptional=nSets===2&&s===2;
+    sHtml+=`<div style="display:flex;align-items:center;gap:10px;${isOptional?'opacity:.6':''}">
+      <span style="font-size:.75rem;color:var(--muted);width:50px">Set ${s+1}${isOptional?' (si nec.)':''}</span>
+      <input type="number" id="ic-s${s}-a" value="${setData.a}" min="0" max="99" style="width:60px;text-align:center">
+      <span style="color:var(--muted)">–</span>
+      <input type="number" id="ic-s${s}-b" value="${setData.b}" min="0" max="99" style="width:60px;text-align:center">
+    </div>`;
+  }
+  sHtml+=`</div>`;
+  setsContainer.innerHTML=sHtml;
+  document.getElementById('modal-ic-score').classList.remove('hidden');
+  setTimeout(()=>document.getElementById('ic-s0-a').focus(),80);
+}
+
+function closeIcModal(){
+  document.getElementById('modal-ic-score').classList.add('hidden');
+  curIcMatch=null;
+}
+
+function saveIcMatchScore(){
+  if(!curIcMatch)return;
+  const t=T();if(!t?.interclub)return;
+  const ic=t.interclub;
+  const{pi,ri,mi}=curIcMatch;
+  const r=ic.poules[pi].rencontres[ri];
+  const m=r.matches[mi];
+  const nSets=ic.sets;
+
+  m.playersA=document.getElementById('ic-modal-players1').value.trim();
+  m.playersB=document.getElementById('ic-modal-players2').value.trim();
+
+  // Read sets
+  const sets=[];
+  const maxSets=nSets===1?1:3;
+  for(let s=0;s<maxSets;s++){
+    const a=parseInt(document.getElementById(`ic-s${s}-a`)?.value)||0;
+    const b=parseInt(document.getElementById(`ic-s${s}-b`)?.value)||0;
+    sets.push({a,b});
+  }
+  m.sets=sets;
+
+  // Determine match winner
+  if(nSets===1){
+    m.setsPlayed=1;
+    m.winner=sets[0].a>sets[0].b?'A':sets[0].b>sets[0].a?'B':null;
+  } else {
+    // Best of 3: first to 2 sets
+    let wA=0,wB=0,sp=0;
+    for(const s of sets){
+      if(s.a===0&&s.b===0&&sp>0) break;
+      if(s.a>s.b) wA++;else if(s.b>s.a) wB++;
+      sp++;
+      if(wA===2||wB===2) break;
+    }
+    m.setsPlayed=sp;
+    m.winner=wA>wB?'A':wB>wA?'B':null;
+  }
+  m.played=!!m.winner;
+
+  // Recompute rencontre score
+  const mA=r.matches.filter(mx=>mx.played&&mx.winner==='A').length;
+  const mB=r.matches.filter(mx=>mx.played&&mx.winner==='B').length;
+  r.score={a:mA,b:mB};
+  r.played=r.matches.every(mx=>mx.played);
+
+  closeIcModal();
+  renderInterclub();
+  saveState();
+  if(m.winner) toast(`${m.type} : Équipe ${m.winner==='A'?icTeamName(r.teamA,ic):icTeamName(r.teamB,ic)} gagne`);
+}
+
+// Team name editor
+function openIcTeamEditor(){
+  const t=T();if(!t?.interclub)return;
+  const ic=t.interclub;
+  const html=ic.teams.map((team,i)=>`
+    <div class="player-row" style="margin-bottom:4px">
+      <span class="player-num">${i+1}</span>
+      <input type="text" value="${team.name}" maxlength="30"
+        onblur="T().interclub.teams[${i}].name=this.value;saveState();renderInterclub()"
+        style="flex:1;font-size:.9rem">
+    </div>`).join('');
+  // Reuse the new-t modal as a simple editor
+  const modal=document.getElementById('modal-new-t');
+  modal.querySelector('.modal-title').innerHTML='Noms des <span style="color:var(--accent)">Équipes</span>';
+  modal.querySelector('.modal-sub').textContent='Cliquez sur un nom pour le modifier';
+  modal.querySelector('input[type=text]').style.display='none';
+  // Insert team list after sub
+  let edDiv=document.getElementById('ic-team-edit-div');
+  if(!edDiv){edDiv=document.createElement('div');edDiv.id='ic-team-edit-div';modal.querySelector('.modal-actions').before(edDiv);}
+  edDiv.innerHTML=html;
+  modal.querySelector('button.btn-primary').onclick=()=>{
+    modal.querySelector('input[type=text]').style.display='';
+    modal.querySelector('.modal-title').innerHTML='Nouveau <span style="color:var(--accent)">Tournoi</span>';
+    modal.querySelector('.modal-sub').textContent='Donnez un nom à ce tournoi';
+    if(edDiv)edDiv.innerHTML='';
+    modal.querySelector('button.btn-primary').onclick=confirmNewT;
+    modal.classList.add('hidden');
+    renderInterclub();
+  };
+  modal.classList.remove('hidden');
+}
+
+// ══════════════════════════════════════════════════════
+//  BUG FIXES
+// ══════════════════════════════════════════════════════
+
+// Fix 1: renderLiguePhase now accepts an optional container ID
+// so phase2 tab can render ligue content in its own container
+const _origRenderLiguePhase=renderLiguePhase;
+function renderLiguePhase(phase,phI,t,containerId){
+  const cid=containerId||'poules-container';
+  const poule=phase.poules[0];
+  const standings=pouleSt(poule,t);
+  const playerHat=phase.playerHat||{};
+  const hatColors=['var(--accent)','var(--accent3)','var(--purple)','var(--accent2)','var(--win)'];
+  const hats={};
+  Object.entries(playerHat).forEach(([name,hat])=>{if(!hats[hat])hats[hat]=[];hats[hat].push(name);});
+  let hatHTML='';
+  if(Object.keys(hats).length>1){
+    const sortedHats=Object.keys(hats).sort((a,b)=>a-b);
+    hatHTML=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+      ${sortedHats.map((h,i)=>`<span style="font-size:.7rem;font-weight:700;padding:3px 9px;border-radius:12px;background:${hatColors[i]||'var(--muted)'}22;color:${hatColors[i]||'var(--muted)'};border:1px solid ${hatColors[i]||'var(--muted)'}44">
+        🎩 Chapeau ${h} : ${hats[h].join(', ')}
+      </span>`).join('')}
+    </div>`;
+  }
+  const played=poule.matches.filter(m=>m.played).length;
+  const total=poule.matches.length;
+  const standingHTML=`<table><thead><tr><th>#</th><th>Joueur</th><th>Étab.</th><th>J</th><th>V</th><th>N</th><th>D</th><th>BP</th><th>BC</th><th>Diff</th><th>Pts</th></tr></thead><tbody>
+    ${standings.map((s,i)=>{
+      const hat=playerHat[s.name];
+      const hatColor=hat?hatColors[hat-1]||'var(--muted)':'';
+      const pObj=t.players.find(p=>p.name===s.name);
+      const etab=pObj?.etablissement||'';
+      return`<tr>
+        <td><span class="rank-num ${i<3?'rank-'+(i+1):''}">${i+1}</span></td>
+        <td><strong>${s.name}</strong>${hat?`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${hatColor};margin-left:5px;vertical-align:middle" title="Chapeau ${hat}"></span>`:''}</td>
+        <td>${etab?`<span class="etab-tag" style="font-size:.58rem">${etab}</span>`:'—'}</td>
+        <td>${s.j}</td><td>${s.w}</td><td>${s.d}</td><td>${s.l}</td>
+        <td>${s.gf}</td><td>${s.ga}</td>
+        <td style="color:${s.gf-s.ga>0?'var(--win)':s.gf-s.ga<0?'var(--lose)':'var(--muted)'}">${s.gf-s.ga>0?'+':''}${s.gf-s.ga}</td>
+        <td><span class="pts">${s.pts}</span></td>
+      </tr>`;}).join('')}
+  </tbody></table>`;
+  const matchHTML=poule.matches.map((m,mi)=>{
+    const p1w=m.played&&m.score1>m.score2,p2w=m.played&&m.score2>m.score1;
+    const sameHatLabel=m.sameHat?`<span style="font-size:.58rem;color:var(--muted);padding:1px 4px;background:var(--surface2);border-radius:2px;border:1px solid var(--border)">fin de phase</span>`:'';
+    return`<div class="match-row ${m.played?'done':''}" onclick="openScoreModal(${phI},0,${mi})">
+      <div class="match-player ${m.played?(p1w?'win':''):''}">${m.p1}</div>
+      <div class="match-vs">vs</div>
+      <div class="match-player right ${m.played?(p2w?'win':''):''}">${m.p2}</div>
+      ${sameHatLabel}
+      ${m.played?`<div class="match-result">${m.score1} – ${m.score2}</div>`:`<div class="match-result" style="color:var(--accent);font-size:.72rem">▶</div>`}
+    </div>`;}).join('');
+  document.getElementById(cid).innerHTML=`
+    ${hatHTML}
+    <div class="grid-2" style="gap:14px">
+      <div>
+        <div class="card-title" style="margin-bottom:8px">📊 Classement Ligue <span style="font-size:.7rem;font-weight:400;color:var(--muted)">${played}/${total} matchs</span></div>
+        <div class="card" style="padding:0;overflow:hidden">${standingHTML}</div>
+      </div>
+      <div>
+        <div class="card-title" style="margin-bottom:8px">Matchs</div>
+        <div class="poule-card">${matchHTML}</div>
+      </div>
+    </div>`;
+}
+
+// Fix 2: renderPhase2 — use correct container, don't double-render
+function renderPhase2(){
+  const t=T();if(!t)return;
+  const container=document.getElementById('phase2-container');
+  if(t.poulePhases.length<2){
+    container.innerHTML='<div class="alert alert-warn">Pas de phase 2 active.</div>';return;
+  }
+  const phase=t.poulePhases[t.poulePhases.length-1];
+  const phI=t.poulePhases.length-1;
+  const allM=phase.poules.flatMap(p=>p.matches);
+  const played=allM.filter(m=>m.played).length;
+  const total=allM.length;
+
+  let html=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;flex-wrap:wrap;gap:8px">
+    <div>
+      <div class="section-title"><span>${phase.name}</span></div>
+      <div class="section-sub">${phase.isLigue?'Mode Ligue':'Poules'} · Cliquez sur un match pour saisir le score</div>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="checkPoulesComplete()">Vérifier avancement</button>
+      <button class="btn btn-primary btn-sm" onclick="showPhaseTransition()">Phase suivante →</button>
+    </div>
+  </div>
+  <div class="status-bar">
+    <div class="stat-item"><div class="stat-val">${phase.isLigue?phase.poules[0].players.length:phase.poules.length}</div><div class="stat-lbl">${phase.isLigue?'Joueurs':'Poules'}</div></div>
+    <div class="stat-item"><div class="stat-val">${played}/${total}</div><div class="stat-lbl">Matchs joués</div></div>
+    <div class="stat-item"><div class="stat-val">${total-played}</div><div class="stat-lbl">Restants</div></div>
+  </div>
+  <div id="phase2-inner"></div>`;
+  container.innerHTML=html;
+
+  if(phase.isLigue){
+    renderLiguePhase(phase,phI,t,'phase2-inner');
+  } else {
+    // Classic poules — render into phase2-inner
+    document.getElementById('phase2-inner').innerHTML=phase.poules.map((po,pi)=>{
+      const st=pouleSt(po,t);
+      const mHTML=po.matches.map((m,mi)=>{
+        const p1w=m.played&&m.score1>m.score2,p2w=m.played&&m.score2>m.score1;
+        return`<div class="match-row ${m.played?'done':''}" onclick="openScoreModal(${phI},${pi},${mi})">
+          <div class="match-player ${m.played?(p1w?'win':''):''}">${m.p1}</div>
+          <div class="match-vs">vs</div>
+          <div class="match-player right ${m.played?(p2w?'win':''):''}">${m.p2}</div>
+          ${m.played?`<div class="match-result">${m.score1} – ${m.score2}</div>`:`<div class="match-result" style="color:var(--accent);font-size:.72rem">▶</div>`}
+        </div>`;}).join('');
+      const sHTML=`<table><thead><tr><th>#</th><th>Joueur</th><th>J</th><th>V</th><th>N</th><th>D</th><th>Pts</th></tr></thead><tbody>
+        ${st.map((s,i)=>`<tr><td><span class="rank-num ${i<3?'rank-'+(i+1):''}">${i+1}</span></td><td>${s.name}</td><td>${s.j}</td><td>${s.w}</td><td>${s.d}</td><td>${s.l}</td><td><span class="pts">${s.pts}</span></td></tr>`).join('')}
+      </tbody></table>`;
+      return`<div class="poule-card">
+        <div class="poule-header"><div class="poule-name">${po.name}</div><span style="color:var(--muted);font-size:.75rem">${po.matches.filter(m=>m.played).length}/${po.matches.length}</span></div>
+        <div class="grid-2" style="padding:12px;gap:12px">
+          <div><div class="card-title" style="margin-bottom:6px">Matchs</div>${mHTML}</div>
+          <div><div class="card-title" style="margin-bottom:6px">Classement</div>${sHTML}</div>
+        </div>
+      </div>`;}).join('');
+  }
+}
+
+// Fix 3: Mixed mode — ensure consolPlayers are injected into LBR0 at creation
+// (already handled in createBracket — verify propagate doesn't double-inject)
 
 // Patch all state-mutating functions to auto-save
 // We wrap the core mutation entry points
@@ -2339,8 +3044,15 @@ if(_initT){
 renderTBar();renderPlayerList();applyResponsiveLayout();
 // Apply format UI after DOM is ready
 selectFormat(currentFormat);
+// Show dynamic tabs if needed
+const _initT2=T();
+if(_initT2){
+  document.getElementById('tab-btn-phase2').classList.toggle('hidden',(_initT2.poulePhases?.length||0)<2);
+  document.getElementById('tab-btn-interclub').classList.toggle('hidden',!_initT2.interclub?.started);
+  if(_initT2.interclub?.started) showTab('interclub');
+}
 if(loaded&&tournaments.length){
-  setTimeout(()=>toast(`✓ ${tournaments.length} tournoi(s) restauré(s)  depuis la mémoire`,'#3ecf8e'),500);
+  setTimeout(()=>toast(`✓ ${tournaments.length} tournoi(s) restauré(s) depuis la mémoire`,'#3ecf8e'),500);
 }
 </script>
 </body>
