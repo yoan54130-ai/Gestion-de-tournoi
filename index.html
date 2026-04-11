@@ -416,6 +416,7 @@ tbody td{padding:7px 10px}
     <div><div class="section-title"><span>Phase</span> de Poules</div><div class="section-sub">Cliquez sur un match pour saisir le score</div></div>
     <div style="display:flex;gap:7px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="checkPoulesComplete()">Vérifier avancement</button>
+      <button class="btn btn-danger btn-sm" onclick="confirmResetTournament()">↺ Réinitialiser</button>
       <button class="btn btn-primary btn-sm" onclick="showPhaseTransition()">Phase suivante →</button>
     </div>
   </div>
@@ -428,9 +429,9 @@ tbody td{padding:7px 10px}
 <!-- PLANNING -->
 <div id="tab-planning" class="hidden">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;flex-wrap:wrap;gap:8px">
-    <div><div class="section-title"><span>Planning</span> des Matchs</div><div class="section-sub">Ordre optimisé pour maximiser le repos entre deux matchs d'un même joueur</div></div>
+    <div><div class="section-title"><span>Planning</span> des Matchs</div><div class="section-sub">Ordre optimisé — poules, élimination et consolante</div></div>
     <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
-      <div style="display:flex;flex-direction:column;gap:3px"><label class="form-label">Terrains</label><input type="number" id="num-terrains" value="1" min="1" max="8" style="width:68px" oninput="renderPlanning()"></div>
+      <div style="display:flex;flex-direction:column;gap:3px"><label class="form-label">Terrains</label><input type="number" id="num-terrains" value="2" min="1" max="8" style="width:68px" oninput="saveTerrainsCount();renderPlanning()"></div>
       <button class="btn btn-ghost btn-sm" onclick="renderPlanning()" style="align-self:flex-end">↺</button>
       <button class="btn btn-primary btn-sm" onclick="window.print()" style="align-self:flex-end">🖨 Imprimer</button>
     </div>
@@ -625,21 +626,38 @@ tbody td{padding:7px 10px}
 
 <!-- MODAL: Interclub match score -->
 <div id="modal-ic-score" class="modal-overlay hidden">
-  <div class="modal" style="max-width:520px">
-    <div class="modal-title">Score <span style="color:var(--accent)" id="ic-modal-match-type"></span></div>
+  <div class="modal" style="max-width:540px">
+    <div class="modal-title">🏸 <span style="color:var(--accent)" id="ic-modal-match-type"></span></div>
     <div class="modal-sub" id="ic-modal-teams"></div>
-    <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <span style="font-size:.75rem;color:var(--muted)">Joueurs :</span>
-      <input type="text" id="ic-modal-players1" placeholder="Joueur(s) équipe A…" style="flex:1;min-width:120px;font-size:.85rem">
-      <span style="color:var(--muted)">vs</span>
-      <input type="text" id="ic-modal-players2" placeholder="Joueur(s) équipe B…" style="flex:1;min-width:120px;font-size:.85rem">
-    </div>
-    <div id="ic-sets-container">
-      <!-- sets rendered dynamically -->
-    </div>
+    <!-- Player selection -->
+    <div id="ic-player-selection" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px"></div>
+    <!-- Sets -->
+    <div id="ic-sets-container"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeIcModal()">Annuler</button>
       <button class="btn btn-primary" onclick="saveIcMatchScore()">✓ Valider</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Interclub team roster -->
+<div id="modal-ic-roster" class="modal-overlay hidden">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">👥 Joueurs <span style="color:var(--accent)" id="ic-roster-team-name"></span></div>
+    <div class="modal-sub">Saisissez les joueurs présents (séparés par ligne)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px">
+      <div>
+        <div class="form-label" style="margin-bottom:4px">🔵 Garçons</div>
+        <textarea id="ic-roster-boys" rows="5" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:.88rem;resize:vertical" placeholder="Un nom par ligne…"></textarea>
+      </div>
+      <div>
+        <div class="form-label" style="margin-bottom:4px">🔴 Filles</div>
+        <textarea id="ic-roster-girls" rows="5" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:.88rem;resize:vertical" placeholder="Un nom par ligne…"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeIcRoster()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveIcRoster()">✓ Valider</button>
     </div>
   </div>
 </div>
@@ -729,7 +747,7 @@ function showTab(name){
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',TABS[i]===name));
   if(name==='classement') renderClassement();
   if(name==='poules') renderPoules();
-  if(name==='planning') renderPlanning();
+  if(name==='planning'){loadTerrainsCount();renderPlanning();}
   if(name==='elimination') renderBracket();
   if(name==='phase2') renderPhase2();
   if(name==='interclub') renderInterclub();
@@ -2153,91 +2171,140 @@ function propagateBracket(b){
 // ══════════════════════════════════════════════════════
 //  PLANNING
 // ══════════════════════════════════════════════════════
-function schedPlan(nT){
-  const t=T();if(!t)return[];
-  const phase=t.poulePhases[t.poulePhases.length-1];if(!phase)return[];
-  const all=[];
-  phase.poules.forEach((po,pi)=>po.matches.forEach((m,mi)=>all.push({...m,pouleIdx:pi,matchIdx:mi,pouleName:po.name})));
-  const total=all.length,sched=new Array(total).fill(false);
+function schedPlan(items,nT){
+  // items: array of {players:[], played, ...}
+  const unplayed=items.filter(it=>!it.played);
+  const total=unplayed.length;
+  if(!total)return[];
+  const sched=new Array(total).fill(false);
   const slots=[],last={};let rem=total,si=0;
   while(rem>0){
     const slot=[],busy=new Set();
     for(let tr=0;tr<nT;tr++){
       let best=null,bS=-Infinity;
-      for(let i=0;i<all.length;i++){
-        if(sched[i])continue;const m=all[i];
-        if(busy.has(m.p1)||busy.has(m.p2))continue;
-        const r1=last[m.p1]!==undefined?(si-last[m.p1]-1):Infinity;
-        const r2=last[m.p2]!==undefined?(si-last[m.p2]-1):Infinity;
-        const sc=Math.min(r1,r2)*1000+(r1===Infinity?999:r1)+(r2===Infinity?999:r2);
-        if(sc>bS){bS=sc;best={idx:i,match:m,r1,r2};}
+      for(let i=0;i<unplayed.length;i++){
+        if(sched[i])continue;
+        const it=unplayed[i];
+        if(it.players.some(p=>busy.has(p)))continue;
+        const rests=it.players.map(p=>last[p]!==undefined?si-last[p]-1:Infinity);
+        const minR=Math.min(...rests);
+        const sc=minR*1000+rests.reduce((a,b)=>a+b,0)+(Math.random()*.001);
+        if(sc>bS){bS=sc;best={idx:i,item:it,rests};}
       }
-      if(best){sched[best.idx]=true;busy.add(best.match.p1);busy.add(best.match.p2);last[best.match.p1]=si;last[best.match.p2]=si;slot.push(best);rem--;}
-      else slot.push(null);
+      if(best){
+        sched[best.idx]=true;
+        best.item.players.forEach(p=>{busy.add(p);last[p]=si;});
+        slot.push({item:best.item,rests:best.rests});
+        rem--;
+      } else slot.push(null);
     }
     slots.push(slot);si++;
   }
   return slots;
 }
+
 function renderPlanning(){
   const container=document.getElementById('planning-container');
   const t=T();if(!t)return;
-  const phase=t.poulePhases[t.poulePhases.length-1];
-  if(!phase){container.innerHTML='<div class="alert alert-warn">Démarrez le tournoi pour voir le planning.</div>';return;}
-  const nT=Math.max(1,parseInt(document.getElementById('num-terrains')?.value)||1);
-  const slots=schedPlan(nT);
-  if(!slots.length){container.innerHTML='<div class="alert alert-info">Aucun match à planifier.</div>';return;}
-  const pSl={};
-  slots.forEach((slot,si)=>slot.forEach(e=>{if(!e)return;[e.match.p1,e.match.p2].forEach(p=>{if(!pSl[p])pSl[p]=[];pSl[p].push(si);});}));
-  const pMR={};
-  Object.entries(pSl).forEach(([p,ss])=>{let min=Infinity;for(let i=1;i<ss.length;i++)min=Math.min(min,ss[i]-ss[i-1]-1);pMR[p]=ss.length<2?null:min;});
-  const total=slots.length;
+
+  // Load per-tournament terrains count
+  loadTerrainsCount();
+  const nT=Math.max(1,parseInt(document.getElementById('num-terrains')?.value)||2);
+
+  // Collect all matches: poules + bracket + consolante
+  const allItems=collectAllMatches(t);
+  if(!allItems.length){
+    container.innerHTML='<div class="alert alert-warn">Démarrez le tournoi pour voir le planning.</div>';return;
+  }
+
+  const playedItems=allItems.filter(it=>it.played);
+  const unplayedItems=allItems.filter(it=>!it.played);
+  const slots=schedPlan(allItems,nT);
+
+  // Player timeline (only for poule+bracket players who play multiple matches)
+  const playerSlots={};
+  slots.forEach((slot,si)=>{
+    slot.forEach(e=>{
+      if(!e)return;
+      e.item.players.forEach(p=>{
+        if(!playerSlots[p])playerSlots[p]=[];
+        playerSlots[p].push(si);
+      });
+    });
+  });
+
+  // Type badge colors
+  function typeBadge(type){
+    if(type==='poule') return 'var(--accent3)';
+    if(type==='wb') return 'var(--accent)';
+    if(type==='lb') return 'var(--accent2)';
+    if(type==='gf') return 'var(--win)';
+    return 'var(--purple)';
+  }
+
+  const totalSlots=slots.length;
   let html=`<div class="planning-legend">
-    <div class="legend-item"><div class="legend-dot" style="background:rgba(79,196,207,.3);border:1px solid var(--accent3)"></div>Match</div>
-    <div class="legend-item"><div class="legend-dot" style="background:rgba(62,207,142,.2);border:1px solid var(--win)"></div>Joué</div>
-    <div class="legend-item"><div class="legend-dot" style="background:rgba(224,92,58,.2);border:1px solid var(--accent2)"></div>⚠ Enchaînement</div>
-    <div class="legend-item" style="margin-left:auto;color:var(--text)"><strong>${total}</strong> créneaux · <strong>${nT}</strong> terrain(s)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(79,196,207,.3);border:1px solid var(--accent3)"></div>Poule</div>
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(240,192,64,.3);border:1px solid var(--accent)"></div>WB</div>
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(224,92,58,.3);border:1px solid var(--accent2)"></div>LB</div>
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(155,108,255,.3);border:1px solid var(--purple)"></div>Consolante</div>
+    <div class="legend-item" style="margin-left:auto;color:var(--text)">
+      <strong>${totalSlots}</strong> créneaux · <strong>${nT}</strong> terrain(s) · 
+      <strong>${playedItems.length}</strong>/<strong>${allItems.length}</strong> joués
+    </div>
   </div>`;
+
   if(nT>1){
-    html+=`<div class="terrain-header-grid" style="grid-template-columns:repeat(${nT},1fr)">`;
+    html+=`<div class="terrain-header-grid" style="grid-template-columns:repeat(${nT},1fr);margin-left:44px">`;
     for(let tr=0;tr<nT;tr++) html+=`<div class="terrain-label">🟦 Terrain ${tr+1}</div>`;
     html+=`</div>`;
   }
-  const phI=t.poulePhases.length-1;
+
   slots.forEach((slot,si)=>{
     html+=`<div class="planning-slot"><div class="slot-num">${si+1}</div>
       <div class="slot-terrain-grid" style="grid-template-columns:repeat(${nT},1fr);flex:1">`;
     slot.forEach(e=>{
       if(!e){html+=`<div class="slot-match-cell empty-cell">—</div>`;return;}
-      const m=e.match;
-      html+=`<div class="slot-match-cell ${m.played?'played-cell':''}"
-        onclick="openScoreModal(${phI},${m.pouleIdx},${m.matchIdx})">
+      const it=e.item;
+      const hasWarn=e.rests&&e.rests.some(r=>r===0);
+      const badgeColor=typeBadge(it.type);
+      html+=`<div class="slot-match-cell" onclick="${it.onclick}">
         <div class="cell-players">
-          <span class="cell-p">${m.p1}</span><span class="cell-vs">vs</span><span class="cell-p">${m.p2}</span>
-          ${e.r1===0||e.r2===0?`<span class="rest-warning">⚡ 0 repos</span>`:''}
+          <span class="cell-p">${it.p1}</span>
+          <span class="cell-vs">vs</span>
+          <span class="cell-p">${it.p2}</span>
+          ${hasWarn?`<span class="rest-warning">⚡ 0 repos</span>`:''}
         </div>
-        <span class="cell-poule-tag">${m.pouleName}</span>
-        ${m.played?`<span class="cell-score">${m.score1}–${m.score2}</span>`:''}
+        <span class="cell-poule-tag" style="border-color:${badgeColor};color:${badgeColor}">${it.label}</span>
+        ${it.score?`<span class="cell-score">${it.score}</span>`:''}
       </div>`;
     });
     html+=`</div></div>`;
   });
-  html+=`<div style="height:1px;background:var(--border);margin:16px 0"></div>
-  <div class="card-title" style="margin-bottom:9px">👤 Résumé par joueur</div><div class="grid-3">`;
-  const allPl=[...new Set(phase.poules.flatMap(p=>p.players))].sort();
-  allPl.forEach(pl=>{
-    const ms=pSl[pl]||[],mr=pMR[pl];
-    const tl=Array.from({length:total},(_,i)=>ms.includes(i)?'play':'idle');
-    const rl=mr===null?'—':mr===0?`<span style="color:var(--accent2)">⚡ 0 enchaînement!</span>`:mr===Infinity?'∞':`${mr} créneau(x)`;
-    html+=`<div class="card" style="padding:12px">
-      <div style="font-weight:700;margin-bottom:5px">${pl}</div>
-      <div style="font-size:.76rem;color:var(--muted);margin-bottom:5px">${ms.length} match(s) · repos min : ${rl}</div>
-      <div class="player-timeline">
-        ${tl.map((type,i)=>`<div class="timeline-dot ${type==='play'?'dot-play':'dot-rest'}" title="Créneau ${i+1}">${type==='play'?'▶':i+1}</div>`).join('')}
-      </div>
-    </div>`;
-  });
-  html+=`</div>`;
+
+  // Player summary
+  const allPlayers=[...new Set(allItems.flatMap(it=>it.players))].sort();
+  if(allPlayers.length){
+    html+=`<div style="height:1px;background:var(--border);margin:16px 0"></div>
+    <div class="card-title" style="margin-bottom:9px">👤 Résumé par joueur</div>
+    <div class="grid-3">`;
+    allPlayers.forEach(pl=>{
+      const ms=playerSlots[pl]||[];
+      let minRest=Infinity;
+      for(let i=1;i<ms.length;i++) minRest=Math.min(minRest,ms[i]-ms[i-1]-1);
+      const rl=ms.length<2?'—':minRest===0?`<span style="color:var(--accent2)">⚡ 0!</span>`:minRest===Infinity?'∞':`${minRest}`;
+      const tl=Array.from({length:totalSlots},(_,i)=>ms.includes(i)?'play':'idle');
+      html+=`<div class="card" style="padding:12px">
+        <div style="font-weight:700;margin-bottom:4px;font-size:.88rem">${pl}</div>
+        <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${ms.length} match(s) · repos min : ${rl}</div>
+        <div class="player-timeline">
+          ${tl.map((type,i)=>`<div class="timeline-dot ${type==='play'?'dot-play':'dot-rest'}" title="Créneau ${i+1}">${type==='play'?'▶':i+1}</div>`).join('')}
+        </div>
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+
   container.innerHTML=html;
 }
 
@@ -2474,22 +2541,33 @@ function loadState(){
 }
 
 // ══════════════════════════════════════════════════════
-//  INTERCLUB ENGINE
+//  INTERCLUB ENGINE  (version complète)
 // ══════════════════════════════════════════════════════
 
-// Default match types for badminton
-const IC_DEFAULT_MATCH_TYPES=[
-  {label:'Simple Homme',short:'SH'},
-  {label:'Simple Dame',short:'SD'},
-  {label:'Double Homme',short:'DH'},
-  {label:'Double Dame',short:'DD'},
-  {label:'Double Mixte',short:'DX'},
+const IC_MATCH_CATALOG=[
+  {label:'Simple Homme', short:'SH', gender:'M', players:1},
+  {label:'Simple Dame',  short:'SD', gender:'F', players:1},
+  {label:'Double Homme', short:'DH', gender:'M', players:2},
+  {label:'Double Dame',  short:'DD', gender:'F', players:2},
+  {label:'Double Mixte', short:'DX', gender:'X', players:2},
 ];
 
-let icMatchTypes=[...IC_DEFAULT_MATCH_TYPES];
+let icMatchTypes=[
+  {label:'Simple Homme',short:'SH',gender:'M',players:1},
+  {label:'Simple Dame', short:'SD',gender:'F',players:1},
+  {label:'Double Homme',short:'DH',gender:'M',players:2},
+  {label:'Double Dame', short:'DD',gender:'F',players:2},
+  {label:'Double Mixte',short:'DX',gender:'X',players:2},
+];
 
 function initInterclubMatchTypes(){
-  icMatchTypes=[...IC_DEFAULT_MATCH_TYPES];
+  icMatchTypes=[
+    {label:'Simple Homme',short:'SH',gender:'M',players:1},
+    {label:'Simple Dame', short:'SD',gender:'F',players:1},
+    {label:'Double Homme',short:'DH',gender:'M',players:2},
+    {label:'Double Dame', short:'DD',gender:'F',players:2},
+    {label:'Double Mixte',short:'DX',gender:'X',players:2},
+  ];
   renderInterclubMatchTypes();
 }
 
@@ -2499,14 +2577,22 @@ function renderInterclubMatchTypes(){
   c.innerHTML=icMatchTypes.map((mt,i)=>`
     <div class="player-row" style="margin-bottom:4px">
       <span class="player-num">${i+1}</span>
-      <input type="text" value="${mt.label}" onblur="icMatchTypes[${i}].label=this.value" style="flex:2;min-width:80px;font-size:.85rem">
-      <input type="text" value="${mt.short}" onblur="icMatchTypes[${i}].short=this.value" maxlength="4" style="width:50px;font-size:.85rem;text-align:center">
+      <span style="flex:1;font-size:.88rem;font-weight:600">${mt.label}</span>
+      <span class="etab-tag" style="font-size:.6rem">${mt.short}</span>
       <button class="btn btn-danger btn-sm" onclick="removeInterclubMatchType(${i})">✕</button>
-    </div>`).join('');
+    </div>`).join('')+
+  `<div style="margin-top:8px">
+    <div class="form-label" style="margin-bottom:5px">Ajouter :</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${IC_MATCH_CATALOG.map(mt=>`<button class="btn btn-ghost btn-sm" onclick="addInterclubMatchType('${mt.short}')" style="font-size:.72rem;padding:6px 10px">${mt.label}</button>`).join('')}
+    </div>
+  </div>`;
 }
 
-function addInterclubMatchType(){
-  icMatchTypes.push({label:`Match ${icMatchTypes.length+1}`,short:`M${icMatchTypes.length+1}`});
+function addInterclubMatchType(short){
+  const mt=IC_MATCH_CATALOG.find(m=>m.short===short);
+  if(!mt)return;
+  icMatchTypes.push({...mt});
   renderInterclubMatchTypes();
 }
 
@@ -2520,27 +2606,27 @@ function updateInterclubInfo(){
   const nPoules=parseInt(document.getElementById('ic-num-poules')?.value)||1;
   const el=document.getElementById('ic-info');if(!el)return;
   const perPoule=Math.ceil(nTeams/nPoules);
-  const matchesPerPoule=perPoule*(perPoule-1)/2;
-  el.innerHTML=`✓ <strong>${nTeams}</strong> équipes · <strong>${nPoules}</strong> poule(s) · ~${perPoule} équipes/poule · ${matchesPerPoule} rencontres/poule · ${icMatchTypes.length} matchs/rencontre`;
+  const rencontresPerPoule=perPoule*(perPoule-1)/2;
+  const totalMatchs=rencontresPerPoule*icMatchTypes.length;
+  el.innerHTML=`✓ <strong>${nTeams}</strong> équipes · <strong>${nPoules}</strong> poule(s) · <strong>${perPoule}</strong> équipes/poule · <strong>${rencontresPerPoule}</strong> rencontres/poule · <strong>${icMatchTypes.length}</strong> matchs/rencontre (${totalMatchs} matchs totaux)`;
   el.className='alert alert-info';el.classList.remove('hidden');
 }
 
-// Start interclub tournament
+// ── Launch interclub ──────────────────────────────────
 function startInterclubTournament(){
   const t=T();if(!t)return;
+  if(icMatchTypes.length===0){toast('Ajoutez au moins un type de match','#e05c3a');return;}
   const nTeams=parseInt(document.getElementById('ic-num-teams')?.value)||4;
   const nPoules=parseInt(document.getElementById('ic-num-poules')?.value)||1;
   const format=document.querySelector('input[name="ic-format"]:checked')?.value||'club';
   const sets=parseInt(document.querySelector('input[name="ic-sets"]:checked')?.value||'1');
   if(nTeams<2){toast('Minimum 2 équipes','#e05c3a');return;}
 
-  // Create team names
   const teams=Array.from({length:nTeams},(_,i)=>({
-    name:`Équipe ${i+1}`,
-    id:`team_${i}`,
+    name:`Équipe ${i+1}`, id:`team_${i}`,
+    roster:{boys:[],girls:[]}, // joueurs présents
   }));
 
-  // Distribute into poules (round-robin within each poule)
   const poules=[];
   for(let p=0;p<nPoules;p++){
     const pouleTeams=teams.filter((_,i)=>i%nPoules===p);
@@ -2548,27 +2634,22 @@ function startInterclubTournament(){
     for(let i=0;i<pouleTeams.length;i++){
       for(let j=i+1;j<pouleTeams.length;j++){
         rencontres.push({
-          teamA:pouleTeams[i].id,
-          teamB:pouleTeams[j].id,
-          matches:icMatchTypes.map((mt,mi)=>({
-            type:mt.label,short:mt.short,
-            playersA:'',playersB:'',
+          teamA:pouleTeams[i].id, teamB:pouleTeams[j].id,
+          matches:icMatchTypes.map(mt=>({
+            type:mt.label, short:mt.short, gender:mt.gender, numPlayers:mt.players,
+            playersA:[], playersB:[],
             sets:[{a:0,b:0},{a:0,b:0},{a:0,b:0}],
-            setsPlayed:0,
-            winner:null,played:false
+            setsPlayed:0, winner:null, played:false
           })),
-          score:{a:0,b:0}, // nb matchs gagnés
-          points:{a:0,b:0}, // classement points
-          played:false
+          score:{a:0,b:0}, played:false
         });
       }
     }
-    poules.push({name:`Poule ${String.fromCharCode(65+p)}`,teams:pouleTeams.map(t=>t.id),rencontres});
+    poules.push({name:`Poule ${String.fromCharCode(65+p)}`,teams:pouleTeams.map(tm=>tm.id),rencontres});
   }
 
   t.interclub={teams,poules,format,sets,matchTypes:[...icMatchTypes],started:true};
-  t.format='interclub';
-  t.currentPhase='interclub';
+  t.format='interclub'; t.currentPhase='interclub';
   document.getElementById('phase-label').textContent='INTERCLUB';
   document.getElementById('tab-btn-interclub').classList.remove('hidden');
   showTab('interclub');
@@ -2576,7 +2657,7 @@ function startInterclubTournament(){
   toast(`Interclub lancé ! ${nTeams} équipes · ${nPoules} poule(s) · format ${format.toUpperCase()}`);
 }
 
-// ── RENDER INTERCLUB ──────────────────────────────────
+// ── Render interclub ──────────────────────────────────
 function renderInterclub(){
   const t=T();if(!t||!t.interclub){
     document.getElementById('interclub-container').innerHTML=`
@@ -2587,24 +2668,24 @@ function renderInterclub(){
   const ic=t.interclub;
   const {teams,poules,format,sets}=ic;
 
-  // Compute standings per poule
   let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
     <div>
       <div class="section-title"><span>Interclub</span></div>
-      <div class="section-sub">Format ${format==='unss'?'UNSS':'Club'} · ${sets===1?'1 set':'2 sets gagnants'} · ${ic.matchTypes.length} matchs/rencontre</div>
+      <div class="section-sub">Format ${format==='unss'?'UNSS':'Club'} · ${sets===1?'1 set':'2 sets gagnants'} · ${ic.matchTypes.length} matchs/rencontre · 2 terrains</div>
     </div>
-    <button class="btn btn-ghost btn-sm" onclick="openIcTeamEditor()">✏️ Noms des équipes</button>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="openIcTeamEditor()">✏️ Équipes</button>
+      <button class="btn btn-primary btn-sm" onclick="showIcPlanning()">📋 Planning</button>
+    </div>
   </div>`;
 
   poules.forEach((poule,pi)=>{
     const standings=icPouleStandings(poule,ic,t);
     html+=`<div class="b-section-lbl"><span>${poule.name}</span></div>`;
-
-    // Standings table
     html+=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:10px">
       <table><thead><tr>
         <th>#</th><th>Équipe</th><th>J</th><th>V</th><th>N</th><th>D</th>
-        <th>Pts matchs</th><th>Pts clt</th>
+        <th>Pts matchs</th><th>Pts classement</th>
         ${format==='club'?'<th>Bonus</th>':''}
       </tr></thead><tbody>
       ${standings.map((s,i)=>`<tr>
@@ -2613,32 +2694,40 @@ function renderInterclub(){
         <td>${s.j}</td><td>${s.v}</td><td>${s.n}</td><td>${s.d}</td>
         <td style="color:var(--accent3)">${s.ptsMatchs}</td>
         <td><span class="pts">${s.pts}</span></td>
-        ${format==='club'?`<td style="color:var(--muted);font-size:.8rem">${s.bonus>0?`+${s.bonus}`:''}</td>`:''}
+        ${format==='club'?`<td style="color:var(--muted);font-size:.8rem">${s.bonus>0?'+'+s.bonus:''}</td>`:''}
       </tr>`).join('')}
-      </tbody></table>
-    </div>`;
+      </tbody></table></div>`;
 
-    // Rencontres
     html+=`<div class="grid-2" style="gap:10px;margin-bottom:20px">`;
     poule.rencontres.forEach((r,ri)=>{
       const tA=icTeamName(r.teamA,ic), tB=icTeamName(r.teamB,ic);
-      const totalPlayed=r.matches.filter(m=>m.played).length;
-      const total=r.matches.length;
-      const scoreStr=r.played?`<span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--accent)">${r.score.a} – ${r.score.b}</span>`
-        :`<span style="font-size:.75rem;color:var(--muted)">${totalPlayed}/${total} matchs</span>`;
+      const totalPlayed=r.matches.filter(m=>m.played).length, total=r.matches.length;
       html+=`<div class="poule-card" style="${r.played?'border-color:rgba(62,207,142,.3)':''}">
         <div class="poule-header" style="${r.played?'background:rgba(62,207,142,.05)':''}">
           <div style="font-weight:700;font-size:.88rem">${tA} <span style="color:var(--muted)">vs</span> ${tB}</div>
-          ${scoreStr}
+          <div style="display:flex;align-items:center;gap:8px">
+            ${r.played?`<span style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--accent)">${r.score.a} – ${r.score.b}</span>`
+              :`<span style="font-size:.75rem;color:var(--muted)">${totalPlayed}/${total}</span>`}
+            <button class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:.65rem" onclick="openIcRosterForMatch(${pi},${ri})">👥 Joueurs</button>
+          </div>
         </div>
         ${r.matches.map((m,mi)=>{
           const winA=m.played&&m.winner==='A', winB=m.played&&m.winner==='B';
           const setStr=m.played?m.sets.slice(0,Math.max(m.setsPlayed,1)).map(s=>`${s.a}-${s.b}`).join(' / '):'';
-          return`<div class="match-row ${m.played?'done':''}" style="padding:10px 12px" onclick="openIcMatchModal(${pi},${ri},${mi})">
-            <div class="match-player ${winA?'win':''}" style="font-size:.82rem">${m.short||m.type}<br><span style="color:var(--muted);font-size:.7rem">${m.playersA||'—'}</span></div>
-            <div class="match-vs">vs</div>
-            <div class="match-player right ${winB?'win':''}" style="font-size:.82rem;text-align:left"><br><span style="color:var(--muted);font-size:.7rem">${m.playersB||'—'}</span></div>
-            ${m.played?`<div class="match-result" style="font-size:.8rem">${setStr}</div>`:`<div class="match-result" style="color:var(--accent);font-size:.72rem">▶</div>`}
+          const pA=m.playersA?.join(' / ')||'—', pB=m.playersB?.join(' / ')||'—';
+          const genderIcon=m.gender==='M'?'🔵':m.gender==='F'?'🔴':'🟣';
+          return`<div class="match-row ${m.played?'done':''}" style="padding:9px 12px" onclick="openIcMatchModal(${pi},${ri},${mi})">
+            <div style="display:flex;flex-direction:column;gap:1px;flex:1;text-align:right">
+              <span class="${winA?'win':''}" style="font-weight:${winA?'700':'400'};font-size:.82rem">${pA}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:1px;min-width:60px">
+              <span style="font-size:.64rem;color:var(--muted)">${genderIcon} ${m.short}</span>
+              ${m.played?`<span style="font-family:'Bebas Neue',sans-serif;font-size:.9rem;color:var(--accent3)">${setStr}</span>`
+                :`<span style="color:var(--accent);font-size:.72rem">▶</span>`}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:1px;flex:1">
+              <span class="${winB?'win':''}" style="font-weight:${winB?'700':'400'};font-size:.82rem">${pB}</span>
+            </div>
           </div>`;}).join('')}
       </div>`;
     });
@@ -2648,11 +2737,9 @@ function renderInterclub(){
   document.getElementById('interclub-container').innerHTML=html;
 }
 
-function icTeamName(teamId,ic){
-  return ic.teams.find(t=>t.id===teamId)?.name||teamId;
-}
+function icTeamName(teamId,ic){return ic.teams.find(t=>t.id===teamId)?.name||teamId;}
 
-function icPouleStandings(poule,ic,t){
+function icPouleStandings(poule,ic){
   const stats={};
   poule.teams.forEach(tid=>{stats[tid]={teamId:tid,j:0,v:0,n:0,d:0,pts:0,ptsMatchs:0,bonus:0};});
   poule.rencontres.forEach(r=>{
@@ -2660,40 +2747,70 @@ function icPouleStandings(poule,ic,t){
     const sA=stats[r.teamA],sB=stats[r.teamB];
     if(!sA||!sB)return;
     sA.j++;sB.j++;
-    // Points matchs = total individual matches won
     const mA=r.matches.filter(m=>m.played&&m.winner==='A').length;
     const mB=r.matches.filter(m=>m.played&&m.winner==='B').length;
     sA.ptsMatchs+=mA; sB.ptsMatchs+=mB;
-
     if(ic.format==='unss'){
-      // UNSS: winner = more individual points (set scores); tie-break = more matches won
       const totalA=r.matches.reduce((s,m)=>s+(m.played?m.sets.slice(0,m.setsPlayed).reduce((a,st)=>a+st.a,0):0),0);
       const totalB=r.matches.reduce((s,m)=>s+(m.played?m.sets.slice(0,m.setsPlayed).reduce((a,st)=>a+st.b,0):0),0);
       if(totalA>totalB||(totalA===totalB&&mA>mB)){sA.v++;sA.pts+=3;}
       else if(totalB>totalA||(totalA===totalB&&mB>mA)){sB.v++;sB.pts+=3;}
-      else{sA.n++;sB.n++;sA.pts+=1;sB.pts+=1;}
+      else{sA.n++;sB.n++;sA.pts++;sB.pts++;}
     } else {
-      // Club: winner = more matches won; draw possible
       if(mA>mB){
         sA.v++;sA.pts+=5;
-        if(mB===0){sA.bonus++;sA.pts+=1;} // victoire à 0 → bonus offensif
-        if(mB>0&&mA-mB<=2){sB.bonus++;sB.pts+=1;} // défaite par ≤2 → bonus défensif
+        if(mB===0){sA.bonus++;sA.pts++;}
+        if(mB>0&&mA-mB<=2){sB.bonus++;sB.pts++;}
       } else if(mB>mA){
         sB.v++;sB.pts+=5;
-        if(mA===0){sB.bonus++;sB.pts+=1;}
-        if(mA>0&&mB-mA<=2){sA.bonus++;sA.pts+=1;}
-      } else {
-        sA.n++;sB.n++;sA.pts+=3;sB.pts+=3;
-      }
-      sA.d=sA.j-sA.v-sA.n;sB.d=sB.j-sB.v-sB.n;
+        if(mA===0){sB.bonus++;sB.pts++;}
+        if(mA>0&&mB-mA<=2){sA.bonus++;sA.pts++;}
+      } else {sA.n++;sB.n++;sA.pts+=3;sB.pts+=3;}
     }
+    sA.d=Math.max(0,sA.j-sA.v-sA.n);
+    sB.d=Math.max(0,sB.j-sB.v-sB.n);
   });
-  // Fix defeats count
-  Object.values(stats).forEach(s=>{s.d=Math.max(0,s.j-s.v-s.n);});
   return Object.values(stats).sort((a,b)=>b.pts-a.pts||b.ptsMatchs-a.ptsMatchs);
 }
 
-// ── INTERCLUB MATCH MODAL ─────────────────────────────
+// ── Roster management ────────────────────────────────
+let curIcRoster=null; // {teamIdx, matchContext:{pi,ri}}
+
+function openIcRosterForMatch(pi,ri){
+  // Show roster editor for both teams of this rencontre
+  const t=T();if(!t?.interclub)return;
+  const ic=t.interclub;
+  const r=ic.poules[pi].rencontres[ri];
+  // Open for team A first
+  curIcRoster={teamId:r.teamA,pi,ri};
+  const teamIdx=ic.teams.findIndex(tm=>tm.id===r.teamA);
+  const team=ic.teams[teamIdx];
+  document.getElementById('ic-roster-team-name').textContent=icTeamName(r.teamA,ic);
+  document.getElementById('ic-roster-boys').value=(team.roster?.boys||[]).join('\n');
+  document.getElementById('ic-roster-girls').value=(team.roster?.girls||[]).join('\n');
+  document.getElementById('modal-ic-roster').classList.remove('hidden');
+}
+
+function closeIcRoster(){
+  document.getElementById('modal-ic-roster').classList.add('hidden');
+  curIcRoster=null;
+}
+
+function saveIcRoster(){
+  if(!curIcRoster)return;
+  const t=T();if(!t?.interclub)return;
+  const ic=t.interclub;
+  const team=ic.teams.find(tm=>tm.id===curIcRoster.teamId);
+  if(!team)return;
+  if(!team.roster) team.roster={boys:[],girls:[]};
+  team.roster.boys=document.getElementById('ic-roster-boys').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  team.roster.girls=document.getElementById('ic-roster-girls').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  saveState();
+  closeIcRoster();
+  toast(`Effectif "${team.name}" sauvegardé`);
+}
+
+// ── Match modal ────────────────────────────────────
 let curIcMatch=null;
 
 function openIcMatchModal(pi,ri,mi){
@@ -2705,28 +2822,74 @@ function openIcMatchModal(pi,ri,mi){
   curIcMatch={pi,ri,mi};
 
   const tA=icTeamName(r.teamA,ic), tB=icTeamName(r.teamB,ic);
-  document.getElementById('ic-modal-match-type').textContent=m.type;
+  document.getElementById('ic-modal-match-type').textContent=`${m.short} – ${m.type}`;
   document.getElementById('ic-modal-teams').textContent=`${tA} vs ${tB}`;
-  document.getElementById('ic-modal-players1').value=m.playersA||'';
-  document.getElementById('ic-modal-players2').value=m.playersB||'';
 
+  // Build player dropdowns
+  const teamA=ic.teams.find(tm=>tm.id===r.teamA);
+  const teamB=ic.teams.find(tm=>tm.id===r.teamB);
+  const rA=teamA?.roster||{boys:[],girls:[]};
+  const rB=teamB?.roster||{boys:[],girls:[]};
+
+  function getPool(roster,gender){
+    if(gender==='M') return roster.boys||[];
+    if(gender==='F') return roster.girls||[];
+    return [...(roster.boys||[]),...(roster.girls||[])]; // mixte: all
+  }
+
+  const poolA=getPool(rA,m.gender);
+  const poolB=getPool(rB,m.gender);
+  const isDouble=m.numPlayers===2;
+  const selA=m.playersA||[];
+  const selB=m.playersB||[];
+
+  function playerRow(side,slotIdx,pool,selectedVal){
+    const id=`ic-pl-${side}-${slotIdx}`;
+    const roleLabel=isDouble?(slotIdx===0?'Joueur 1':'Joueur 2'):'Joueur';
+    if(pool.length>0){
+      return`<div style="margin-bottom:4px">
+        <label style="font-size:.68rem;color:var(--muted)">${roleLabel}</label>
+        <select id="${id}" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 8px;border-radius:6px;font-size:.85rem">
+          <option value="">— Choisir —</option>
+          ${pool.map(p=>`<option value="${p}" ${p===selectedVal?'selected':''}>${p}</option>`).join('')}
+        </select></div>`;
+    }
+    return`<div style="margin-bottom:4px">
+      <label style="font-size:.68rem;color:var(--muted)">${roleLabel}</label>
+      <input type="text" id="${id}" value="${selectedVal||''}" placeholder="Nom du joueur…" style="width:100%;font-size:.85rem"></div>`;
+  }
+
+  const nSlots=isDouble?2:1;
+  let psHtml=`<div>
+    <div class="form-label" style="margin-bottom:6px">🔵 ${tA}</div>
+    ${Array.from({length:nSlots},(_,i)=>playerRow('A',i,poolA,selA[i]||'')).join('')}
+  </div>
+  <div>
+    <div class="form-label" style="margin-bottom:6px">🔴 ${tB}</div>
+    ${Array.from({length:nSlots},(_,i)=>playerRow('B',i,poolB,selB[i]||'')).join('')}
+  </div>`;
+  document.getElementById('ic-player-selection').innerHTML=psHtml;
+
+  // Sets
   const nSets=ic.sets;
-  const setsContainer=document.getElementById('ic-sets-container');
-  let sHtml=`<div style="display:flex;flex-direction:column;gap:8px">`;
-  for(let s=0;s<(nSets===1?1:3);s++){
-    const setData=m.sets[s]||{a:0,b:0};
-    const isOptional=nSets===2&&s===2;
-    sHtml+=`<div style="display:flex;align-items:center;gap:10px;${isOptional?'opacity:.6':''}">
-      <span style="font-size:.75rem;color:var(--muted);width:50px">Set ${s+1}${isOptional?' (si nec.)':''}</span>
-      <input type="number" id="ic-s${s}-a" value="${setData.a}" min="0" max="99" style="width:60px;text-align:center">
-      <span style="color:var(--muted)">–</span>
-      <input type="number" id="ic-s${s}-b" value="${setData.b}" min="0" max="99" style="width:60px;text-align:center">
+  let sHtml=`<div class="sep" style="margin:10px 0"></div>
+    <div style="font-size:.75rem;color:var(--muted);margin-bottom:6px">SCORES (${nSets===1?'1 set':'meilleur des 3 sets'})</div>
+    <div style="display:flex;flex-direction:column;gap:6px">`;
+  const maxSets=nSets===1?1:3;
+  for(let s=0;s<maxSets;s++){
+    const sd=m.sets[s]||{a:0,b:0};
+    const opt=nSets===2&&s===2;
+    sHtml+=`<div style="display:flex;align-items:center;gap:8px;${opt?'opacity:.5':''}">
+      <span style="font-size:.72rem;color:var(--muted);width:60px">Set ${s+1}${opt?' (si néc.)':''}</span>
+      <input type="number" id="ic-s${s}-a" value="${sd.a}" min="0" max="99" style="width:58px;text-align:center">
+      <span style="color:var(--muted);font-family:'Bebas Neue',sans-serif">–</span>
+      <input type="number" id="ic-s${s}-b" value="${sd.b}" min="0" max="99" style="width:58px;text-align:center">
     </div>`;
   }
   sHtml+=`</div>`;
-  setsContainer.innerHTML=sHtml;
+  document.getElementById('ic-sets-container').innerHTML=sHtml;
   document.getElementById('modal-ic-score').classList.remove('hidden');
-  setTimeout(()=>document.getElementById('ic-s0-a').focus(),80);
+  setTimeout(()=>document.getElementById('ic-s0-a')?.focus(),80);
 }
 
 function closeIcModal(){
@@ -2742,9 +2905,17 @@ function saveIcMatchScore(){
   const r=ic.poules[pi].rencontres[ri];
   const m=r.matches[mi];
   const nSets=ic.sets;
+  const nSlots=m.numPlayers===2?2:1;
 
-  m.playersA=document.getElementById('ic-modal-players1').value.trim();
-  m.playersB=document.getElementById('ic-modal-players2').value.trim();
+  // Read players
+  m.playersA=Array.from({length:nSlots},(_,i)=>{
+    const el=document.getElementById(`ic-pl-A-${i}`);
+    return el?el.value.trim():'';
+  }).filter(Boolean);
+  m.playersB=Array.from({length:nSlots},(_,i)=>{
+    const el=document.getElementById(`ic-pl-B-${i}`);
+    return el?el.value.trim():'';
+  }).filter(Boolean);
 
   // Read sets
   const sets=[];
@@ -2756,12 +2927,10 @@ function saveIcMatchScore(){
   }
   m.sets=sets;
 
-  // Determine match winner
   if(nSets===1){
     m.setsPlayed=1;
     m.winner=sets[0].a>sets[0].b?'A':sets[0].b>sets[0].a?'B':null;
   } else {
-    // Best of 3: first to 2 sets
     let wA=0,wB=0,sp=0;
     for(const s of sets){
       if(s.a===0&&s.b===0&&sp>0) break;
@@ -2774,49 +2943,153 @@ function saveIcMatchScore(){
   }
   m.played=!!m.winner;
 
-  // Recompute rencontre score
   const mA=r.matches.filter(mx=>mx.played&&mx.winner==='A').length;
   const mB=r.matches.filter(mx=>mx.played&&mx.winner==='B').length;
   r.score={a:mA,b:mB};
   r.played=r.matches.every(mx=>mx.played);
 
-  closeIcModal();
-  renderInterclub();
-  saveState();
-  if(m.winner) toast(`${m.type} : Équipe ${m.winner==='A'?icTeamName(r.teamA,ic):icTeamName(r.teamB,ic)} gagne`);
+  closeIcModal();renderInterclub();saveState();
+  if(m.winner) toast(`${m.type} : ${m.winner==='A'?icTeamName(r.teamA,ic):icTeamName(r.teamB,ic)} gagne`);
 }
 
-// Team name editor
+// ── IC Team editor ────────────────────────────────────
 function openIcTeamEditor(){
   const t=T();if(!t?.interclub)return;
   const ic=t.interclub;
-  const html=ic.teams.map((team,i)=>`
+  // Build a proper modal content
+  const modal=document.getElementById('modal-new-t');
+  const origTitle=modal.querySelector('.modal-title').innerHTML;
+  const origSub=modal.querySelector('.modal-sub').textContent;
+  const origInput=modal.querySelector('input[type=text]');
+  origInput.style.display='none';
+  modal.querySelector('.modal-title').innerHTML='✏️ Noms des <span style="color:var(--accent)">Équipes</span>';
+  modal.querySelector('.modal-sub').textContent='Modifiez les noms puis fermez';
+  let edDiv=document.getElementById('ic-team-edit-div');
+  if(!edDiv){edDiv=document.createElement('div');edDiv.id='ic-team-edit-div';modal.querySelector('.modal-actions').before(edDiv);}
+  edDiv.innerHTML=ic.teams.map((team,i)=>`
     <div class="player-row" style="margin-bottom:4px">
       <span class="player-num">${i+1}</span>
       <input type="text" value="${team.name}" maxlength="30"
-        onblur="T().interclub.teams[${i}].name=this.value;saveState();renderInterclub()"
+        onblur="T().interclub.teams[${i}].name=this.value.trim()||T().interclub.teams[${i}].name;saveState();renderInterclub()"
         style="flex:1;font-size:.9rem">
+      <button class="btn btn-ghost btn-sm" onclick="openIcTeamRoster(${i})" style="font-size:.7rem">👥</button>
     </div>`).join('');
-  // Reuse the new-t modal as a simple editor
-  const modal=document.getElementById('modal-new-t');
-  modal.querySelector('.modal-title').innerHTML='Noms des <span style="color:var(--accent)">Équipes</span>';
-  modal.querySelector('.modal-sub').textContent='Cliquez sur un nom pour le modifier';
-  modal.querySelector('input[type=text]').style.display='none';
-  // Insert team list after sub
-  let edDiv=document.getElementById('ic-team-edit-div');
-  if(!edDiv){edDiv=document.createElement('div');edDiv.id='ic-team-edit-div';modal.querySelector('.modal-actions').before(edDiv);}
-  edDiv.innerHTML=html;
-  modal.querySelector('button.btn-primary').onclick=()=>{
-    modal.querySelector('input[type=text]').style.display='';
-    modal.querySelector('.modal-title').innerHTML='Nouveau <span style="color:var(--accent)">Tournoi</span>';
-    modal.querySelector('.modal-sub').textContent='Donnez un nom à ce tournoi';
+  const closeBtn=modal.querySelector('button.btn-primary');
+  closeBtn.onclick=()=>{
+    origInput.style.display='';
+    modal.querySelector('.modal-title').innerHTML=origTitle;
+    modal.querySelector('.modal-sub').textContent=origSub;
     if(edDiv)edDiv.innerHTML='';
-    modal.querySelector('button.btn-primary').onclick=confirmNewT;
+    closeBtn.onclick=confirmNewT;
     modal.classList.add('hidden');
-    renderInterclub();
   };
   modal.classList.remove('hidden');
 }
+
+function openIcTeamRoster(teamIdx){
+  const t=T();if(!t?.interclub)return;
+  const ic=t.interclub;
+  const team=ic.teams[teamIdx];
+  curIcRoster={teamId:team.id,teamIdx};
+  document.getElementById('ic-roster-team-name').textContent=team.name;
+  document.getElementById('ic-roster-boys').value=(team.roster?.boys||[]).join('\n');
+  document.getElementById('ic-roster-girls').value=(team.roster?.girls||[]).join('\n');
+  document.getElementById('modal-ic-roster').classList.remove('hidden');
+}
+
+function closeIcRoster(){
+  document.getElementById('modal-ic-roster').classList.add('hidden');
+  curIcRoster=null;
+}
+
+function saveIcRoster(){
+  if(!curIcRoster)return;
+  const t=T();if(!t?.interclub)return;
+  const ic=t.interclub;
+  const team=ic.teams.find(tm=>tm.id===curIcRoster.teamId);
+  if(!team)return;
+  if(!team.roster) team.roster={boys:[],girls:[]};
+  team.roster.boys=document.getElementById('ic-roster-boys').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  team.roster.girls=document.getElementById('ic-roster-girls').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  saveState();closeIcRoster();
+  toast(`Effectif "${team.name}" : ${team.roster.boys.length} garçon(s), ${team.roster.girls.length} fille(s)`);
+}
+
+// ── IC Planning (rest-optimized, 2 courts fixed) ────
+function showIcPlanning(){
+  const t=T();if(!t?.interclub)return;
+  const ic=t.interclub;
+  // Collect all individual matches across all rencontres
+  const allMatchItems=[];
+  ic.poules.forEach((poule,pi)=>{
+    poule.rencontres.forEach((r,ri)=>{
+      r.matches.forEach((m,mi)=>{
+        const pA=(m.playersA||[]).join('/');
+        const pB=(m.playersB||[]).join('/');
+        allMatchItems.push({
+          pi,ri,mi,
+          label:`${m.short}: ${icTeamName(r.teamA,ic)} vs ${icTeamName(r.teamB,ic)}`,
+          players:[...m.playersA||[],...m.playersB||[]],
+          played:m.played,
+          teamA:r.teamA,teamB:r.teamB,
+          matchType:m.short,
+          gender:m.gender
+        });
+      });
+    });
+  });
+
+  // Schedule with 2 courts, rest-optimized
+  const nT=2;
+  const schedule=schedPlan(allMatchItems,nT);
+
+  let html=`<div class="b-section-lbl" style="margin-top:0"><span>Planning</span> Interclub</div>
+  <div class="planning-legend">
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(79,196,207,.3);border:1px solid var(--accent3)"></div>À jouer</div>
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(62,207,142,.2);border:1px solid var(--win)"></div>Joué</div>
+    <div class="legend-item" style="margin-left:auto">2 terrains · ${schedule.length} créneaux</div>
+  </div>
+  <div class="terrain-header-grid" style="grid-template-columns:repeat(2,1fr);margin-left:44px">
+    <div class="terrain-label">🟦 Terrain 1</div><div class="terrain-label">🟦 Terrain 2</div>
+  </div>`;
+
+  schedule.forEach((slot,si)=>{
+    html+=`<div class="planning-slot"><div class="slot-num">${si+1}</div>
+      <div class="slot-terrain-grid" style="grid-template-columns:repeat(2,1fr);flex:1">`;
+    slot.forEach(e=>{
+      if(!e){html+=`<div class="slot-match-cell empty-cell">—</div>`;return;}
+      const it=e.item||e; // schedPlan returns {item,rests}
+      const r=ic.poules[it.pi].rencontres[it.ri];
+      const m=r.matches[it.mi];
+      const tA=icTeamName(r.teamA,ic),tB=icTeamName(r.teamB,ic);
+      const pA=(m.playersA||[]).join(' / ')||'?';
+      const pB=(m.playersB||[]).join(' / ')||'?';
+      html+=`<div class="slot-match-cell ${m.played?'played-cell':''}" onclick="openIcMatchModal(${it.pi},${it.ri},${it.mi})">
+        <div class="cell-players" style="flex-direction:column;align-items:flex-start;gap:1px">
+          <span style="font-size:.65rem;font-weight:700;color:var(--accent)">${m.short}</span>
+          <span class="cell-p" style="font-size:.78rem">${tA}: ${pA}</span>
+          <span class="cell-vs" style="font-size:.65rem">vs</span>
+          <span class="cell-p" style="font-size:.78rem">${tB}: ${pB}</span>
+        </div>
+        ${m.played?`<span class="cell-score">${m.sets.slice(0,m.setsPlayed).map(s=>`${s.a}-${s.b}`).join(' ')}</span>`:''}
+      </div>`;
+    });
+    html+=`</div></div>`;
+  });
+
+  // Show in the interclub container (after standing)
+  const existing=document.getElementById('ic-planning-section');
+  if(existing) existing.remove();
+  const div=document.createElement('div');
+  div.id='ic-planning-section';
+  div.innerHTML=html;
+  document.getElementById('interclub-container').appendChild(div);
+  div.scrollIntoView({behavior:'smooth'});
+}
+
+// Generic rest-optimized scheduler — uses global schedPlan(items, nT)
+// (defined in the planning section above)
+
 
 // ══════════════════════════════════════════════════════
 //  BUG FIXES
@@ -2944,6 +3217,153 @@ function renderPhase2(){
 
 // Fix 3: Mixed mode — ensure consolPlayers are injected into LBR0 at creation
 // (already handled in createBracket — verify propagate doesn't double-inject)
+
+// ══════════════════════════════════════════════════════
+//  PER-TOURNAMENT TERRAINS
+// ══════════════════════════════════════════════════════
+function saveTerrainsCount(){
+  const t=T();if(!t)return;
+  const n=parseInt(document.getElementById('num-terrains')?.value)||2;
+  t.numTerrains=n;
+}
+
+function loadTerrainsCount(){
+  const t=T();if(!t)return;
+  const el=document.getElementById('num-terrains');if(!el)return;
+  el.value=t.numTerrains||2;
+}
+
+// Override showTab to load terrains when switching to planning
+const _origShowTabPlanning=showTab;
+
+// ══════════════════════════════════════════════════════
+//  RESET TOURNAMENT
+// ══════════════════════════════════════════════════════
+function confirmResetTournament(){
+  if(!confirm('Réinitialiser ce tournoi ? Toutes les phases suivantes seront supprimées (la phase 1 est conservée).')) return;
+  resetTournamentPhases();
+}
+
+function resetTournamentPhases(){
+  const t=T();if(!t)return;
+  // Keep only phase 1
+  if(t.poulePhases.length>1) t.poulePhases.splice(1);
+  // Remove bracket/consolante
+  t.bracket=null; t.consolanteBracket=null; t.consolantePhase=null;
+  t.history=[];
+  // Reset phase label
+  t.currentPhase='poules';
+  document.getElementById('phase-label').textContent=t.format==='ligue'?'PHASE DE LIGUE':'PHASE DE POULES';
+  // Hide dynamic tabs
+  document.getElementById('tab-btn-phase2').classList.add('hidden');
+  // Reset phase index
+  currentPoulePhaseIdx=-1;
+  saveState();
+  renderPoules();
+  showTab('poules');
+  toast('Tournoi réinitialisé à la Phase 1 ↩','#f0c040');
+}
+
+// ══════════════════════════════════════════════════════
+//  PLANNING WITH BRACKET + CONSOLANTE MATCHES
+// ══════════════════════════════════════════════════════
+function collectAllMatches(t){
+  const items=[];
+
+  // Poule matches (current phase)
+  const phI=(currentPoulePhaseIdx>=0&&currentPoulePhaseIdx<t.poulePhases.length)
+    ?currentPoulePhaseIdx:t.poulePhases.length-1;
+  const phase=t.poulePhases[phI];
+  if(phase){
+    phase.poules.forEach((po,pi)=>{
+      po.matches.forEach((m,mi)=>{
+        items.push({
+          type:'poule', label:po.name,
+          p1:m.p1, p2:m.p2, played:m.played,
+          players:[m.p1,m.p2],
+          onclick:`openScoreModal(${phI},${pi},${mi})`,
+          score:m.played?`${m.score1}–${m.score2}`:null
+        });
+      });
+    });
+  }
+
+  // Bracket WB matches
+  if(t.bracket){
+    const b=t.bracket;
+    b.wbRounds.forEach((round,ri)=>{
+      round.forEach((m,mi)=>{
+        if(m.isBye||!m.p1||!m.p2) return;
+        items.push({
+          type:'wb',label:wbName(ri,b.wbRounds.length),
+          p1:m.p1,p2:m.p2,played:m.played,
+          players:[m.p1,m.p2],
+          onclick:`openBM('wb-${ri}',${mi})`,
+          score:m.played?`${m.score1}–${m.score2}`:null
+        });
+      });
+    });
+    // LB matches
+    b.lbRounds.forEach((round,ri)=>{
+      round.forEach((m,mi)=>{
+        if(!m.p1||!m.p2) return;
+        items.push({
+          type:'lb',label:lbRoundName(ri,b.lbRounds),
+          p1:m.p1,p2:m.p2,played:m.played,
+          players:[m.p1,m.p2],
+          onclick:`openBM('lb-${ri}',${mi})`,
+          score:m.played?`${m.score1}–${m.score2}`:null
+        });
+      });
+    });
+    // GF
+    if(b.grandFinal&&b.grandFinal.p1&&b.grandFinal.p2){
+      const gf=b.grandFinal;
+      items.push({
+        type:'gf',label:'Grande Finale',
+        p1:gf.p1,p2:gf.p2,played:gf.played,
+        players:[gf.p1,gf.p2],
+        onclick:`openBM('gf',0)`,
+        score:gf.played?`${gf.score1}–${gf.score2}`:null
+      });
+    }
+  }
+
+  // Consolante bracket
+  if(t.consolanteBracket){
+    const cb=t.consolanteBracket;
+    cb.wbRounds.forEach((round,ri)=>{
+      round.forEach((m,mi)=>{
+        if(m.isBye||!m.p1||!m.p2) return;
+        items.push({
+          type:'con',label:`Consolante T${ri+1}`,
+          p1:m.p1,p2:m.p2,played:m.played,
+          players:[m.p1,m.p2],
+          onclick:`openBM('con-${ri}',${mi})`,
+          score:m.played?`${m.score1}–${m.score2}`:null
+        });
+      });
+    });
+  }
+
+  // Consolante poules
+  if(t.consolantePhase){
+    const cp=t.consolantePhase;
+    cp.poules.forEach((po,pi)=>{
+      po.matches.forEach((m,mi)=>{
+        items.push({
+          type:'con-poule',label:`Consolante – ${po.name}`,
+          p1:m.p1,p2:m.p2,played:m.played,
+          players:[m.p1,m.p2],
+          onclick:`openConsolanteScore(${pi},${mi})`,
+          score:m.played?`${m.score1}–${m.score2}`:null
+        });
+      });
+    });
+  }
+
+  return items;
+}
 
 // Patch all state-mutating functions to auto-save
 // We wrap the core mutation entry points
