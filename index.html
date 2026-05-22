@@ -469,9 +469,9 @@ tbody td{padding:7px 10px}
     <div class="modal-title">Saisir le Score</div>
     <div class="modal-sub" id="modal-match-name"></div>
     <div style="display:flex;gap:12px;align-items:center;justify-content:center">
-      <div style="text-align:center"><div id="modal-p1" style="font-weight:600;margin-bottom:6px"></div><input type="number" id="modal-score1" min="0" max="99" value="0" style="width:72px;text-align:center;font-size:1.35rem"></div>
+      <div style="text-align:center"><div id="modal-p1" style="font-weight:600;margin-bottom:6px"></div><input type="number" id="modal-score1" min="0" max="99" placeholder="0" style="width:72px;text-align:center;font-size:1.35rem" onfocus="this.select()"></div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.7rem;color:var(--muted)">–</div>
-      <div style="text-align:center"><div id="modal-p2" style="font-weight:600;margin-bottom:6px"></div><input type="number" id="modal-score2" min="0" max="99" value="0" style="width:72px;text-align:center;font-size:1.35rem"></div>
+      <div style="text-align:center"><div id="modal-p2" style="font-weight:600;margin-bottom:6px"></div><input type="number" id="modal-score2" min="0" max="99" placeholder="0" style="width:72px;text-align:center;font-size:1.35rem" onfocus="this.select()"></div>
     </div>
     <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="saveScore()">✓ Valider</button></div>
   </div>
@@ -616,9 +616,9 @@ tbody td{padding:7px 10px}
     <div class="modal-title">Score <span style="color:var(--accent)">Match</span></div>
     <div class="modal-sub" id="bracket-modal-round"></div>
     <div style="display:flex;gap:12px;align-items:center;justify-content:center">
-      <div style="text-align:center"><div id="bracket-modal-p1" style="font-weight:600;margin-bottom:6px"></div><input type="number" id="bracket-score1" min="0" max="99" value="0" style="width:72px;text-align:center;font-size:1.35rem"></div>
+      <div style="text-align:center"><div id="bracket-modal-p1" style="font-weight:600;margin-bottom:6px"></div><input type="number" id="bracket-score1" min="0" max="99" placeholder="0" style="width:72px;text-align:center;font-size:1.35rem" onfocus="this.select()"></div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.7rem;color:var(--muted)">–</div>
-      <div style="text-align:center"><div id="bracket-modal-p2" style="font-weight:600;margin-bottom:6px"></div><input type="number" id="bracket-score2" min="0" max="99" value="0" style="width:72px;text-align:center;font-size:1.35rem"></div>
+      <div style="text-align:center"><div id="bracket-modal-p2" style="font-weight:600;margin-bottom:6px"></div><input type="number" id="bracket-score2" min="0" max="99" placeholder="0" style="width:72px;text-align:center;font-size:1.35rem" onfocus="this.select()"></div>
     </div>
     <div class="modal-actions"><button class="btn btn-ghost" onclick="closeBracketModal()">Annuler</button><button class="btn btn-primary" onclick="saveBracketScore()">✓ Valider</button></div>
   </div>
@@ -661,6 +661,19 @@ tbody td{padding:7px 10px}
     </div>
   </div>
 </div>
+<!-- MODAL: Poule reorder -->
+<div id="modal-reorder" class="modal-overlay hidden">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-title">Réorganiser les <span style="color:var(--accent)">Poules</span></div>
+    <div class="modal-sub">Cliquez sur un joueur pour le déplacer vers une autre poule.</div>
+    <div id="reorder-container" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:8px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeReorderModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="applyReorder()">✓ Valider &amp; Recalculer</button>
+    </div>
+  </div>
+</div>
+
 <div id="modal-new-t" class="modal-overlay hidden">
   <div class="modal" style="max-width:360px">
     <div class="modal-title">Nouveau <span style="color:var(--accent)">Tournoi</span></div>
@@ -722,7 +735,12 @@ function switchT(id){
   document.getElementById('tab-btn-interclub').classList.toggle('hidden',!t.interclub?.started);
   selectFormat(fmt);
   renderPlayerList();
-  showTab(fmt==='interclub'?'interclub':'setup');
+  // Restore the last active tab for this tournament
+  const tabToShow=t.activeTab||( fmt==='interclub'?'interclub':'setup');
+  // Validate the tab is currently visible before restoring
+  const tabBtn=document.getElementById('tab-btn-'+tabToShow);
+  const isHidden=tabBtn&&tabBtn.classList.contains('hidden');
+  showTab((!tabBtn||isHidden)?( fmt==='interclub'?'interclub':'setup'):tabToShow);
 }
 function deleteT(id,e){
   e.stopPropagation();
@@ -745,6 +763,8 @@ const TABS=['setup','poules','planning','classement','elimination','phase2','int
 function showTab(name){
   TABS.forEach(t=>document.getElementById('tab-'+t).classList.toggle('hidden',t!==name));
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',TABS[i]===name));
+  // Persist active tab per tournament
+  const t=T();if(t) t.activeTab=name;
   if(name==='classement') renderClassement();
   if(name==='poules') renderPoules();
   if(name==='planning'){loadTerrainsCount();renderPlanning();}
@@ -1097,11 +1117,134 @@ function buildPoulePhase(playerObjects,nPoules,phaseName){
   });
   return{name:phaseName,poules,completed:false,etabConflicts:conflicts};
 }
+// ── Round-based match scheduling ────────────────────
+// For a poule of N players, generates matches in rounds so that:
+// - Early rounds: players with unknown relative strength face each other
+// - Later rounds: strong vs strong, weak vs weak (Swiss-style)
+// Each match stores its "slot" (round index) for scheduling.
+// Matches with dynamic p1/p2 (filled after prior results) use refs:
+//   {type:'winner'|'loser', matchIdx:N}
+//
+// We use a fixed pre-computed "tournament order" for each poule size.
+// This gives consistent bracketing regardless of results.
+
+function buildPouleSchedule(players){
+  // Returns array of match objects in play order
+  // For poule of 2: 1 match
+  // For poule of 3: 3 matches in 3 rounds (Swiss: top plays bye-winner last)
+  //   M0: P1 vs P2, M1: P3 vs winner(M0)... no, for 3 players do round-robin in order:
+  //   Standard Swiss 3-player:
+  //     Round 1: P2 vs P3 (seed1=P1 exempt)
+  //     Round 2: P1 vs loser(M0)
+  //     Round 3: P1 vs winner(M0)  ... wait, this is the interclub model
+  //   For individual tournaments, classic round-robin order is fine but
+  //   we ORDER the round-robin by: first rounds avoid top seeds meeting.
+  // For poule of 4: 3 rounds × 2 courts
+  //   Round 1: M0(P1 vs P4), M1(P2 vs P3)
+  //   Round 2: M2(winner(M0) vs winner(M1)), M3(loser(M0) vs loser(M1))
+  //   Round 3: M4(winner(M2) vs loser(M3)? No...) — actually for poule we want:
+  //   All 6 matches in proper order: seeds 1&4 first, then 2&3, then cross-matches
+  // The key insight: store matches with FIXED indices, but the p1/p2 for
+  // later rounds are computed dynamically via `resolveMatchPlayer`.
+
+  const n=players.length;
+  if(n<2) return [];
+
+  // For small poules (2-5), use hardcoded optimal orderings
+  // For larger, fall back to Berger round-robin order
+  if(n===2){
+    return [{p1:players[0],p2:players[1],score1:null,score2:null,played:false,round:0,slot:0}];
+  }
+  if(n===3){
+    // 3 players, 3 matches:
+    // Slot 0: P[1] vs P[2]  (seeds 2&3 first, seed 1 rests)
+    // Slot 1: P[0] vs loser(M0)
+    // Slot 2: P[0] vs winner(M0)
+    // This gives the top seed (P[0]) their hardest match last
+    return [
+      {p1:players[1],p2:players[2],score1:null,score2:null,played:false,round:0,slot:0,matchIdx:0},
+      {p1:players[0],p2Ref:{type:'loser',matchIdx:0},p2:null,score1:null,score2:null,played:false,round:1,slot:1,matchIdx:1},
+      {p1:players[0],p2Ref:{type:'winner',matchIdx:0},p2:null,score1:null,score2:null,played:false,round:2,slot:2,matchIdx:2},
+    ];
+  }
+  if(n===4){
+    // 4 players, 6 matches in 3 rounds of 2 simultaneous matches:
+    // Slot 0 (2 matches): P[0] vs P[3], P[1] vs P[2]
+    // Slot 1 (2 matches): winner(M0) vs winner(M1), loser(M0) vs loser(M1)
+    // Slot 2 (2 matches): winner(M2) vs loser(M3), winner(M3) vs loser(M2)
+    //   → this gives: 1st vs 2nd in final, 3rd vs 4th in consolation
+    return [
+      {p1:players[0],p2:players[3],score1:null,score2:null,played:false,round:0,slot:0,matchIdx:0},
+      {p1:players[1],p2:players[2],score1:null,score2:null,played:false,round:0,slot:0,matchIdx:1},
+      {p1Ref:{type:'winner',matchIdx:0},p1:null,p2Ref:{type:'winner',matchIdx:1},p2:null,score1:null,score2:null,played:false,round:1,slot:1,matchIdx:2},
+      {p1Ref:{type:'loser',matchIdx:0},p1:null,p2Ref:{type:'loser',matchIdx:1},p2:null,score1:null,score2:null,played:false,round:1,slot:1,matchIdx:3},
+      {p1Ref:{type:'winner',matchIdx:2},p1:null,p2Ref:{type:'winner',matchIdx:3},p2:null,score1:null,score2:null,played:false,round:2,slot:2,matchIdx:4},
+      {p1Ref:{type:'loser',matchIdx:2},p1:null,p2Ref:{type:'loser',matchIdx:3},p2:null,score1:null,score2:null,played:false,round:2,slot:2,matchIdx:5},
+    ];
+  }
+  if(n===5){
+    // 5 players, 10 matches. Use seeded round-robin order:
+    // Round 1 (2 matches + 1 bye for P[0]): M0: P[1] vs P[4], M1: P[2] vs P[3]
+    // Round 2 (2 matches + 1 bye for P[4]): M2: P[0] vs P[1], M3: P[2] vs P[3] — wait, need all pairs
+    // For 5 we just do ordered round-robin (all 10 pairs) ordered to minimize top-seed clashes early
+    return buildRROrdered(players);
+  }
+  // Default: round-robin ordered
+  return buildRROrdered(players);
+}
+
+// Classic round-robin with Berger ordering (no dynamic refs for >4 players)
+function buildRROrdered(players){
+  const n=players.length;
+  const nForRR=n%2===0?n:n+1;
+  const arr=[...players.map(p=>p)];
+  if(n%2!==0) arr.push('__bye__');
+  const fixed=arr[0];
+  const rotating=arr.slice(1);
+  const rounds=[];
+  for(let r=0;r<nForRR-1;r++){
+    const day=[];
+    const cur=[fixed,...rotating];
+    for(let i=0;i<nForRR/2;i++){
+      const a=cur[i],b=cur[nForRR-1-i];
+      if(a!=='__bye__'&&b!=='__bye__') day.push({p1:a,p2:b});
+    }
+    rotating.push(rotating.shift());
+    rounds.push(day);
+  }
+  const matches=[];
+  let mi=0,slot=0;
+  rounds.forEach(day=>{
+    day.forEach(({p1,p2})=>{
+      matches.push({p1,p2,score1:null,score2:null,played:false,round:slot,slot,matchIdx:mi++});
+    });
+    slot++;
+  });
+  return matches;
+}
+
+// Resolve p1/p2 for a match that has dynamic refs, given the current match array
+function resolveMatchPlayer(matches, ref){
+  if(!ref) return null;
+  const src=matches[ref.matchIdx];
+  if(!src||!src.played) return null;
+  const srcWinner=src.score1>src.score2?src.p1:src.p2;
+  const srcLoser=src.score1>src.score2?src.p2:src.p1;
+  return ref.type==='winner'?srcWinner:srcLoser;
+}
+
+// Update dynamic match slots after a score is saved
+function updateDynamicMatches(matches){
+  matches.forEach(m=>{
+    if(!m.played){
+      if(m.p1Ref&&!m.p1) m.p1=resolveMatchPlayer(matches,m.p1Ref);
+      if(m.p2Ref&&!m.p2) m.p2=resolveMatchPlayer(matches,m.p2Ref);
+    }
+  });
+}
+
 function rrMatches(players){
-  const m=[];
-  for(let i=0;i<players.length;i++) for(let j=i+1;j<players.length;j++)
-    m.push({p1:players[i],p2:players[j],score1:null,score2:null,played:false});
-  return m;
+  return buildPouleSchedule(players);
 }
 
 // ══════════════════════════════════════════════════════
@@ -1229,33 +1372,108 @@ function renderLiguePhase(phase, phI, t){
 }
 
 function renderClassicPoules(phase, phI, t){
-  document.getElementById('poules-container').innerHTML=phase.poules.map((po,pi)=>{
+  // Resolve dynamic match references (winner/loser of previous matches)
+  phase.poules.forEach(po=>updateDynamicMatches(po.matches));
+  // Ensure a persistent per-terrain schedule exists
+  ensurePouleSchedule(phase,t);
+
+  let html='';
+
+  // ── Per-poule: rounds + standings ──
+  html+=phase.poules.map((po,pi)=>{
     const st=pouleSt(po,t);
-    const mHTML=po.matches.map((m,mi)=>{
-      const p1w=m.played&&m.score1>m.score2,p2w=m.played&&m.score2>m.score1;
-      return`<div class="match-row ${m.played?'done':''}" onclick="openScoreModal(${phI},${pi},${mi})">
-        <div class="match-player ${m.played?(p1w?'win':''):''}">${m.p1}</div>
-        <div class="match-vs">vs</div>
-        <div class="match-player right ${m.played?(p2w?'win':''):''}">${m.p2}</div>
-        ${m.played?`<div class="match-result">${m.score1} – ${m.score2}</div>`:`<div class="match-result" style="color:var(--accent);font-size:.72rem">▶</div>`}
-      </div>`;}).join('');
-    const sHTML=`<table><thead><tr><th>#</th><th>Joueur</th><th>J</th><th>V</th><th>N</th><th>D</th><th>BP</th><th>BC</th><th>Pts</th></tr></thead><tbody>
-      ${st.map((s,i)=>`<tr><td><span class="rank-num ${i<3?'rank-'+(i+1):''}">${i+1}</span></td><td>${s.name}</td><td>${s.j}</td><td>${s.w}</td><td>${s.d}</td><td>${s.l}</td><td>${s.gf}</td><td>${s.ga}</td><td><span class="pts">${s.pts}</span></td></tr>`).join('')}
+    // Group matches by slot/round
+    const bySlot={};
+    po.matches.forEach((m,mi)=>{
+      const s=m.slot??mi;
+      if(!bySlot[s])bySlot[s]=[];
+      bySlot[s].push({m,mi});
+    });
+    const roundsHTML=Object.keys(bySlot).sort((a,b)=>+a-+b).map(slot=>{
+      return`<div style="margin-bottom:10px">
+        <div style="font-size:.65rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent3);margin-bottom:4px;padding:0 14px">Tour ${+slot+1}</div>
+        ${bySlot[slot].map(({m,mi})=>{
+          const p1w=m.played&&m.score1>m.score2, p2w=m.played&&m.score2>m.score1;
+          const p1lbl=m.p1||(m.p1Ref?`${m.p1Ref.type==='winner'?'✓ Vainqueur':'✗ Perdant'} M${m.p1Ref.matchIdx+1}`:'?');
+          const p2lbl=m.p2||(m.p2Ref?`${m.p2Ref.type==='winner'?'✓ Vainqueur':'✗ Perdant'} M${m.p2Ref.matchIdx+1}`:'?');
+          const ok=!!(m.p1&&m.p2);
+          return`<div class="match-row ${m.played?'done':''}" style="${ok?'':'opacity:.5;pointer-events:none'}"
+            onclick="${ok?`openScoreModal(${phI},${pi},${mi})`:''}">
+            <div class="match-player ${p1w?'win':''}" style="font-size:.85rem">${p1lbl}</div>
+            <div class="match-vs">vs</div>
+            <div class="match-player right ${p2w?'win':''}" style="font-size:.85rem">${p2lbl}</div>
+            ${m.played?`<div class="match-result">${m.score1}–${m.score2}</div>`
+              :`<div class="match-result" style="color:${ok?'var(--accent)':'var(--border)'};font-size:.72rem">${ok?'▶':'⏳'}</div>`}
+          </div>`;}).join('')}
+      </div>`;
+    }).join('');
+
+    const sHTML=`<table style="font-size:.78rem"><thead><tr><th>#</th><th>Joueur</th><th>J</th><th>V</th><th>D</th><th>Pts</th></tr></thead><tbody>
+      ${st.map((s,i)=>`<tr>
+        <td><span class="rank-num ${i<3?'rank-'+(i+1):''}">${i+1}</span></td>
+        <td><strong>${s.name}</strong></td>
+        <td>${s.j}</td><td>${s.w}</td><td>${s.l}</td>
+        <td><span class="pts">${s.pts}</span></td>
+      </tr>`).join('')}
     </tbody></table>`;
-    const etabs=[...new Set(po.players.map(nm=>{const p=t.players.find(x=>x.name===nm);return p?.etablissement;}).filter(Boolean))];
+
     return`<div class="poule-card">
       <div class="poule-header">
         <div class="poule-name">${po.name}</div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
-          ${etabs.map(e=>`<span class="etab-tag" style="font-size:.58rem">${e}</span>`).join('')}
-          <span style="color:var(--muted);font-size:.75rem">${po.matches.filter(m=>m.played).length}/${po.matches.length}</span>
-        </div>
+        <span style="color:var(--muted);font-size:.75rem">${po.matches.filter(m=>m.played).length}/${po.matches.length}</span>
       </div>
       <div class="grid-2" style="padding:12px;gap:12px">
-        <div><div class="card-title" style="margin-bottom:6px">Matchs</div>${mHTML}</div>
+        <div><div class="card-title" style="margin-bottom:4px">Matchs par tour</div>${roundsHTML}</div>
         <div><div class="card-title" style="margin-bottom:6px">Classement</div>${sHTML}</div>
       </div>
-    </div>`;}).join('');
+    </div>`;
+  }).join('');
+
+  // ── Planning per terrain ──
+  const schedule=phase._schedule||[];
+  const nT=t.numTerrains||2;
+  if(schedule.length>0){
+    html+=`<div class="b-section-lbl" style="margin-top:24px"><span>Planning</span> par terrain</div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <button class="btn btn-ghost btn-sm" onclick="openReorderModal(${phI})">⇄ Réorganiser les poules</button>
+    </div>
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;min-width:${nT*160+64}px">
+      <thead><tr>
+        <th style="width:44px;text-align:center;padding:6px;font-size:.62rem;color:var(--muted);border-bottom:1px solid var(--border)">#</th>
+        ${Array.from({length:nT},(_,i)=>`<th style="padding:6px;font-size:.62rem;letter-spacing:1px;text-transform:uppercase;color:var(--accent3);border-bottom:1px solid var(--border);border-left:1px solid var(--border)">🟦 Terrain ${i+1}</th>`).join('')}
+      </tr></thead>
+      <tbody>
+      ${schedule.map((slot,si)=>`<tr>
+        <td style="text-align:center;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--muted);padding:4px;border-bottom:1px solid rgba(42,42,61,.4)">${si+1}</td>
+        ${Array.from({length:nT},(_,tr)=>{
+          const entry=slot[tr];
+          if(!entry) return`<td style="border-left:1px solid var(--border);border-bottom:1px solid rgba(42,42,61,.4);padding:3px"><div class="slot-match-cell empty-cell" style="margin:0;min-height:36px">—</div></td>`;
+          const po=phase.poules[entry.pouleIdx];
+          const m=po.matches[entry.matchIdx];
+          const p1=m.p1||(m.p1Ref?`[${m.p1Ref.type==='winner'?'V':'P'} M${m.p1Ref.matchIdx+1}]`:'?');
+          const p2=m.p2||(m.p2Ref?`[${m.p2Ref.type==='winner'?'V':'P'} M${m.p2Ref.matchIdx+1}]`:'?');
+          const ok=!!(m.p1&&m.p2);
+          const w1=m.played&&m.score1>m.score2, w2=m.played&&m.score2>m.score1;
+          return`<td style="border-left:1px solid var(--border);border-bottom:1px solid rgba(42,42,61,.4);padding:3px">
+            <div class="slot-match-cell ${m.played?'played-cell':''}" style="margin:0;${ok?'cursor:pointer':'opacity:.5;cursor:default'}"
+              onclick="${ok?`openScoreModal(${phI},${entry.pouleIdx},${entry.matchIdx})`:''}">
+              <div class="cell-players">
+                <span class="cell-p" style="${w1?'color:var(--win);font-weight:700':''}font-size:.8rem">${p1}</span>
+                <span class="cell-vs">vs</span>
+                <span class="cell-p" style="${w2?'color:var(--win);font-weight:700':''}font-size:.8rem">${p2}</span>
+              </div>
+              <span class="cell-poule-tag">${po.name}</span>
+              ${m.played?`<span class="cell-score">${m.score1}–${m.score2}</span>`:''}
+            </div>
+          </td>`;
+        }).join('')}
+      </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+  }
+
+  document.getElementById('poules-container').innerHTML=html;
 }
 function pouleSt(po,t){
   const stats={};
@@ -1282,10 +1500,10 @@ function openScoreModal(phI,poI,mI){
   curM={phI,poI,mI};
   document.getElementById('modal-p1').textContent=m.p1;
   document.getElementById('modal-p2').textContent=m.p2;
-  document.getElementById('modal-score1').value=m.score1??0;
-  document.getElementById('modal-score2').value=m.score2??0;
+  document.getElementById('modal-score1').value=m.played?(m.score1??""):"";
+  document.getElementById('modal-score2').value=m.played?(m.score2??""):"";
   document.getElementById('modal-score').classList.remove('hidden');
-  setTimeout(()=>document.getElementById('modal-score1').focus(),100);
+  setTimeout(()=>{const el=document.getElementById('modal-score1');if(el){el.focus();el.select();}},100);
 }
 function closeModal(){document.getElementById('modal-score').classList.add('hidden');curM=null;}
 function saveScore(){
@@ -1308,6 +1526,9 @@ function saveScore(){
   m.score1=parseInt(document.getElementById('modal-score1').value)||0;
   m.score2=parseInt(document.getElementById('modal-score2').value)||0;
   m.played=true;
+  // Update any dynamic matches that depend on this result
+  const phase=t.poulePhases[curM.phI];
+  if(phase) phase.poules.forEach(po=>updateDynamicMatches(po.matches));
   closeModal();renderPoules();
   if(!document.getElementById('tab-planning').classList.contains('hidden'))renderPlanning();
   toast(`Score : ${m.p1} ${m.score1}–${m.score2} ${m.p2}`);
@@ -2004,11 +2225,11 @@ function openConsolanteScore(pi,mi){
   curConsolanteScore={pi,mi};
   document.getElementById('modal-p1').textContent=m.p1;
   document.getElementById('modal-p2').textContent=m.p2;
-  document.getElementById('modal-score1').value=m.score1??0;
-  document.getElementById('modal-score2').value=m.score2??0;
+  document.getElementById('modal-score1').value=m.played?(m.score1??""):"";
+  document.getElementById('modal-score2').value=m.played?(m.score2??""):"";
   window._consolanteScoreMode=true;
   document.getElementById('modal-score').classList.remove('hidden');
-  setTimeout(()=>document.getElementById('modal-score1').focus(),100);
+  setTimeout(()=>{const el=document.getElementById('modal-score1');if(el){el.focus();el.select();}},100);
 }
 
 function renderRounds(rounds,pfx){
@@ -2097,10 +2318,10 @@ function openBM(key,mi){
     lbRoundName(parseInt(key.split('-').pop()),b.lbRounds);
   document.getElementById('bracket-modal-p1').textContent=m.p1;
   document.getElementById('bracket-modal-p2').textContent=m.p2;
-  document.getElementById('bracket-score1').value=0;
-  document.getElementById('bracket-score2').value=0;
+  document.getElementById('bracket-score1').value=m.played?(m.score1??""):"";
+  document.getElementById('bracket-score2').value=m.played?(m.score2??""):"";
   document.getElementById('modal-bracket-score').classList.remove('hidden');
-  setTimeout(()=>document.getElementById('bracket-score1').focus(),100);
+  setTimeout(()=>{const el=document.getElementById('bracket-score1');if(el){el.focus();el.select();}},100);
 }
 function closeBracketModal(){document.getElementById('modal-bracket-score').classList.add('hidden');curBP=null;}
 function saveBracketScore(){
@@ -2791,24 +3012,55 @@ function openIcRosterForMatch(pi,ri){
   document.getElementById('modal-ic-roster').classList.remove('hidden');
 }
 
+function openIcTeamEditor(){openIcCombinedEditor(0);}
+
+let _icEditorTeamIdx=0;
+function openIcCombinedEditor(teamIdx){
+  const t=T();if(!t?.interclub)return;
+  const ic=t.interclub;
+  _icEditorTeamIdx=teamIdx;
+  const team=ic.teams[teamIdx];
+  document.getElementById('ic-roster-team-name').innerHTML=
+    `<input type="text" id="ic-editor-team-name" value="${team.name}" maxlength="30"
+      style="background:transparent;border:none;border-bottom:2px solid var(--accent);color:var(--accent);font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;width:220px;padding:2px 4px;outline:none">
+    <span style="font-size:.72rem;color:var(--muted);margin-left:8px">(${teamIdx+1}/${ic.teams.length})</span>`;
+  document.getElementById('ic-roster-boys').value=(team.roster?.boys||[]).join('\n');
+  document.getElementById('ic-roster-girls').value=(team.roster?.girls||[]).join('\n');
+  const modal=document.getElementById('modal-ic-roster');
+  modal.querySelector('.modal-sub').innerHTML=`
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px">
+      ${teamIdx>0?`<button class="btn btn-ghost btn-sm" onclick="saveIcRoster(true);openIcCombinedEditor(${teamIdx-1})">← Précédente</button>`:''}
+      <span style="flex:1;text-align:center;font-size:.78rem;color:var(--muted)">Nom de l'équipe + joueurs présents</span>
+      ${teamIdx<ic.teams.length-1?`<button class="btn btn-ghost btn-sm" onclick="saveIcRoster(true);openIcCombinedEditor(${teamIdx+1})">Suivante →</button>`:''}
+    </div>`;
+  curIcRoster={teamId:team.id,teamIdx};
+  modal.classList.remove('hidden');
+  setTimeout(()=>document.getElementById('ic-editor-team-name')?.select(),80);
+}
+
+function openIcTeamRoster(teamIdx){openIcCombinedEditor(teamIdx);}
+
 function closeIcRoster(){
   document.getElementById('modal-ic-roster').classList.add('hidden');
   curIcRoster=null;
 }
 
-function saveIcRoster(){
+function saveIcRoster(silent=false){
   if(!curIcRoster)return;
   const t=T();if(!t?.interclub)return;
   const ic=t.interclub;
   const team=ic.teams.find(tm=>tm.id===curIcRoster.teamId);
   if(!team)return;
+  const nameEl=document.getElementById('ic-editor-team-name');
+  if(nameEl&&nameEl.value.trim()) team.name=nameEl.value.trim();
   if(!team.roster) team.roster={boys:[],girls:[]};
   team.roster.boys=document.getElementById('ic-roster-boys').value.split('\n').map(s=>s.trim()).filter(Boolean);
   team.roster.girls=document.getElementById('ic-roster-girls').value.split('\n').map(s=>s.trim()).filter(Boolean);
   saveState();
-  closeIcRoster();
-  toast(`Effectif "${team.name}" sauvegardé`);
+  if(!silent){closeIcRoster();renderInterclub();toast(`Équipe "${team.name}" : ${team.roster.boys.length}G + ${team.roster.girls.length}F`);}
 }
+
+
 
 // ── Match modal ────────────────────────────────────
 let curIcMatch=null;
@@ -2879,17 +3131,20 @@ function openIcMatchModal(pi,ri,mi){
   for(let s=0;s<maxSets;s++){
     const sd=m.sets[s]||{a:0,b:0};
     const opt=nSets===2&&s===2;
+    // Show blank if unplayed, existing score if replaying
+    const valA=m.played&&sd.a!==undefined?sd.a:'';
+    const valB=m.played&&sd.b!==undefined?sd.b:'';
     sHtml+=`<div style="display:flex;align-items:center;gap:8px;${opt?'opacity:.5':''}">
       <span style="font-size:.72rem;color:var(--muted);width:60px">Set ${s+1}${opt?' (si néc.)':''}</span>
-      <input type="number" id="ic-s${s}-a" value="${sd.a}" min="0" max="99" style="width:58px;text-align:center">
+      <input type="number" id="ic-s${s}-a" value="${valA}" placeholder="0" min="0" max="99" style="width:58px;text-align:center" onfocus="this.select()">
       <span style="color:var(--muted);font-family:'Bebas Neue',sans-serif">–</span>
-      <input type="number" id="ic-s${s}-b" value="${sd.b}" min="0" max="99" style="width:58px;text-align:center">
+      <input type="number" id="ic-s${s}-b" value="${valB}" placeholder="0" min="0" max="99" style="width:58px;text-align:center" onfocus="this.select()">
     </div>`;
   }
   sHtml+=`</div>`;
   document.getElementById('ic-sets-container').innerHTML=sHtml;
   document.getElementById('modal-ic-score').classList.remove('hidden');
-  setTimeout(()=>document.getElementById('ic-s0-a')?.focus(),80);
+  setTimeout(()=>{const el=document.getElementById('ic-s0-a');if(el){el.focus();el.select();}},80);
 }
 
 function closeIcModal(){
@@ -2953,67 +3208,6 @@ function saveIcMatchScore(){
 }
 
 // ── IC Team editor ────────────────────────────────────
-function openIcTeamEditor(){
-  const t=T();if(!t?.interclub)return;
-  const ic=t.interclub;
-  // Build a proper modal content
-  const modal=document.getElementById('modal-new-t');
-  const origTitle=modal.querySelector('.modal-title').innerHTML;
-  const origSub=modal.querySelector('.modal-sub').textContent;
-  const origInput=modal.querySelector('input[type=text]');
-  origInput.style.display='none';
-  modal.querySelector('.modal-title').innerHTML='✏️ Noms des <span style="color:var(--accent)">Équipes</span>';
-  modal.querySelector('.modal-sub').textContent='Modifiez les noms puis fermez';
-  let edDiv=document.getElementById('ic-team-edit-div');
-  if(!edDiv){edDiv=document.createElement('div');edDiv.id='ic-team-edit-div';modal.querySelector('.modal-actions').before(edDiv);}
-  edDiv.innerHTML=ic.teams.map((team,i)=>`
-    <div class="player-row" style="margin-bottom:4px">
-      <span class="player-num">${i+1}</span>
-      <input type="text" value="${team.name}" maxlength="30"
-        onblur="T().interclub.teams[${i}].name=this.value.trim()||T().interclub.teams[${i}].name;saveState();renderInterclub()"
-        style="flex:1;font-size:.9rem">
-      <button class="btn btn-ghost btn-sm" onclick="openIcTeamRoster(${i})" style="font-size:.7rem">👥</button>
-    </div>`).join('');
-  const closeBtn=modal.querySelector('button.btn-primary');
-  closeBtn.onclick=()=>{
-    origInput.style.display='';
-    modal.querySelector('.modal-title').innerHTML=origTitle;
-    modal.querySelector('.modal-sub').textContent=origSub;
-    if(edDiv)edDiv.innerHTML='';
-    closeBtn.onclick=confirmNewT;
-    modal.classList.add('hidden');
-  };
-  modal.classList.remove('hidden');
-}
-
-function openIcTeamRoster(teamIdx){
-  const t=T();if(!t?.interclub)return;
-  const ic=t.interclub;
-  const team=ic.teams[teamIdx];
-  curIcRoster={teamId:team.id,teamIdx};
-  document.getElementById('ic-roster-team-name').textContent=team.name;
-  document.getElementById('ic-roster-boys').value=(team.roster?.boys||[]).join('\n');
-  document.getElementById('ic-roster-girls').value=(team.roster?.girls||[]).join('\n');
-  document.getElementById('modal-ic-roster').classList.remove('hidden');
-}
-
-function closeIcRoster(){
-  document.getElementById('modal-ic-roster').classList.add('hidden');
-  curIcRoster=null;
-}
-
-function saveIcRoster(){
-  if(!curIcRoster)return;
-  const t=T();if(!t?.interclub)return;
-  const ic=t.interclub;
-  const team=ic.teams.find(tm=>tm.id===curIcRoster.teamId);
-  if(!team)return;
-  if(!team.roster) team.roster={boys:[],girls:[]};
-  team.roster.boys=document.getElementById('ic-roster-boys').value.split('\n').map(s=>s.trim()).filter(Boolean);
-  team.roster.girls=document.getElementById('ic-roster-girls').value.split('\n').map(s=>s.trim()).filter(Boolean);
-  saveState();closeIcRoster();
-  toast(`Effectif "${team.name}" : ${team.roster.boys.length} garçon(s), ${team.roster.girls.length} fille(s)`);
-}
 
 // ── IC Planning (rest-optimized, 2 courts fixed) ────
 function showIcPlanning(){
@@ -3221,10 +3415,160 @@ function renderPhase2(){
 // ══════════════════════════════════════════════════════
 //  PER-TOURNAMENT TERRAINS
 // ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+//  POULE SCHEDULE (persistent, per-terrain)
+// ══════════════════════════════════════════════════════
+// Builds a schedule slot-array [{pouleIdx, matchIdx}] stored in phase._schedule
+// Once built, it never changes — played matches stay in their slot.
+function ensurePouleSchedule(phase, t){
+  if(phase._schedule) return; // already built
+  const nT=t.numTerrains||2;
+  // Collect all matches across all poules with their slot assignments
+  // Each match has a .slot property (its round). We interleave poules.
+  const allEntries=[]; // {pouleIdx, matchIdx, slot}
+  phase.poules.forEach((po,pi)=>{
+    po.matches.forEach((m,mi)=>{
+      allEntries.push({pouleIdx:pi,matchIdx:mi,slot:m.slot??mi,players:()=>[m.p1,m.p2].filter(Boolean)});
+    });
+  });
+  // Sort by slot, then interleave for rest optimization
+  // Use the same schedPlan logic but on the entries
+  allEntries.sort((a,b)=>a.slot-b.slot);
+  // Build schedule: for each time slot, pick nT matches (different players, same or consecutive slots)
+  const scheduled=new Array(allEntries.length).fill(false);
+  const schedule=[];
+  const last={};
+  let rem=allEntries.length, si=0;
+  // We go slot by slot; within a slot we pick up to nT matches
+  // Group by slot first
+  const slotGroups={};
+  allEntries.forEach((e,idx)=>{
+    if(!slotGroups[e.slot])slotGroups[e.slot]=[];
+    slotGroups[e.slot].push({...e,origIdx:idx});
+  });
+  // For each group of slots, assign to courts
+  Object.keys(slotGroups).sort((a,b)=>+a-+b).forEach(slotKey=>{
+    const group=slotGroups[slotKey];
+    // Assign nT at a time
+    for(let i=0;i<group.length;i+=nT){
+      const slot=[];
+      for(let tr=0;tr<nT;tr++){
+        const e=group[i+tr];
+        slot.push(e?{pouleIdx:e.pouleIdx,matchIdx:e.matchIdx}:null);
+      }
+      schedule.push(slot);
+    }
+  });
+  phase._schedule=schedule;
+}
+
+// Rebuild schedule when poules change (reorder) or terrains change
+function rebuildPouleSchedule(phase){
+  delete phase._schedule;
+  // Also rebuild match indices on each match
+  phase.poules.forEach(po=>{
+    po.matches.forEach((m,mi)=>{m.matchIdx=mi;});
+  });
+}
+
+// ── Poule reorder modal ──────────────────────────────
+let _reorderPhaseIdx=-1;
+let _reorderDraft=[]; // [{name, pouleIdx}]
+let _reorderSelected=null; // {name, fromPoule}
+
+function openReorderModal(phI){
+  const t=T();if(!t)return;
+  _reorderPhaseIdx=phI;
+  const phase=t.poulePhases[phI];
+  // Build draft: array of {name, pouleIdx}
+  _reorderDraft=[];
+  phase.poules.forEach((po,pi)=>{po.players.forEach(nm=>_reorderDraft.push({name:nm,pouleIdx:pi}));});
+  _reorderSelected=null;
+  renderReorderModal(phase);
+  document.getElementById('modal-reorder').classList.remove('hidden');
+}
+
+function closeReorderModal(){
+  document.getElementById('modal-reorder').classList.add('hidden');
+  _reorderDraft=[];_reorderSelected=null;
+}
+
+function renderReorderModal(phase){
+  const nPoules=phase.poules.length;
+  const container=document.getElementById('reorder-container');
+  let html='';
+  for(let pi=0;pi<nPoules;pi++){
+    const players=_reorderDraft.filter(d=>d.pouleIdx===pi);
+    html+=`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--accent);margin-bottom:8px;letter-spacing:2px">${phase.poules[pi].name}</div>
+      ${players.map(d=>{
+        const isSelected=_reorderSelected&&_reorderSelected.name===d.name;
+        return`<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;margin-bottom:3px;background:${isSelected?'rgba(240,192,64,.15)':'var(--surface)'};border:1px solid ${isSelected?'var(--accent)':'var(--border)'};cursor:pointer"
+          onclick="toggleReorderPlayer('${d.name}',${pi})">
+          <span style="flex:1;font-size:.85rem;font-weight:${isSelected?'700':'400'}">${d.name}</span>
+          ${isSelected?`<span style="font-size:.68rem;color:var(--accent)">Sélectionné — cliquez sur une poule cible</span>`:''}
+        </div>`;}).join('')}
+      ${_reorderSelected&&_reorderSelected.fromPoule!==pi?`<div style="padding:6px 8px;border:2px dashed var(--accent);border-radius:6px;text-align:center;cursor:pointer;font-size:.8rem;color:var(--accent)" onclick="moveReorderPlayer(${pi})">→ Déplacer ici</div>`:''}
+    </div>`;
+  }
+  container.innerHTML=html;
+}
+
+function toggleReorderPlayer(name,pi){
+  const t=T();if(!t)return;
+  const phase=t.poulePhases[_reorderPhaseIdx];
+  if(_reorderSelected&&_reorderSelected.name===name){
+    _reorderSelected=null;
+  } else if(_reorderSelected&&_reorderSelected.fromPoule!==pi){
+    // Move selected to this poule by swapping with this player
+    const fromEntry=_reorderDraft.find(d=>d.name===_reorderSelected.name);
+    const toEntry=_reorderDraft.find(d=>d.name===name);
+    if(fromEntry&&toEntry){
+      const tmp=fromEntry.pouleIdx;
+      fromEntry.pouleIdx=toEntry.pouleIdx;
+      toEntry.pouleIdx=tmp;
+    }
+    _reorderSelected=null;
+  } else {
+    _reorderSelected={name,fromPoule:pi};
+  }
+  renderReorderModal(phase);
+}
+
+function moveReorderPlayer(targetPoule){
+  if(!_reorderSelected) return;
+  const entry=_reorderDraft.find(d=>d.name===_reorderSelected.name);
+  if(entry) entry.pouleIdx=targetPoule;
+  _reorderSelected=null;
+  const t=T();if(!t)return;
+  renderReorderModal(t.poulePhases[_reorderPhaseIdx]);
+}
+
+function applyReorder(){
+  const t=T();if(!t)return;
+  const phase=t.poulePhases[_reorderPhaseIdx];
+  // Apply draft to phase.poules
+  phase.poules.forEach((po,pi)=>{
+    po.players=_reorderDraft.filter(d=>d.pouleIdx===pi).map(d=>d.name);
+    po.matches=rrMatches(po.players); // Rebuild matches for new composition
+  });
+  // Rebuild schedule
+  rebuildPouleSchedule(phase);
+  closeReorderModal();
+  renderPoules();
+  saveState();
+  toast('Poules réorganisées et planning recalculé ✓');
+}
+
 function saveTerrainsCount(){
   const t=T();if(!t)return;
   const n=parseInt(document.getElementById('num-terrains')?.value)||2;
+  const old=t.numTerrains||2;
   t.numTerrains=n;
+  // Rebuild schedule if terrain count changed
+  if(n!==old){
+    t.poulePhases.forEach(phase=>{if(!phase.isLigue) rebuildPouleSchedule(phase);});
+  }
 }
 
 function loadTerrainsCount(){
