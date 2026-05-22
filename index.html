@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -402,13 +402,30 @@ tbody td{padding:7px 10px}
         </div>
         <button class="btn btn-ghost btn-sm" onclick="addInterclubMatchType()" style="margin-top:6px">+ Ajouter un type de match</button>
         <div id="ic-info" class="alert alert-info hidden" style="margin-top:8px"></div>
-      </div>
+      </div><!-- /config-interclub -->
+
+      <!-- LANCER -->
+      <div class="card">
+        <div class="card-title">🚀 Lancer</div>
         <p id="launch-desc" style="color:var(--muted);font-size:.84rem;margin-bottom:12px">Les joueurs sont répartis en <strong style="color:var(--accent)">évitant le même établissement dans une poule</strong>. La séparation est optimisée automatiquement.</p>
         <button class="btn btn-primary btn-full" onclick="startTournament()">▶ Démarrer le Tournoi</button>
+      </div><!-- /lancer -->
+
+    </div><!-- /setup-col2 -->
+  </div><!-- /setup-grid -->
+
+  <!-- Danger zone -->
+  <div style="margin-top:28px;padding-top:16px;border-top:1px solid var(--border)">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:.7rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent2);margin-bottom:2px">Zone de danger</div>
+        <div style="font-size:.78rem;color:var(--muted)">La suppression d'un tournoi est irréversible.</div>
       </div>
+      <button class="btn btn-danger btn-sm" onclick="confirmDeleteT()">🗑 Supprimer ce tournoi</button>
     </div>
   </div>
-</div>
+
+</div><!-- /tab-setup -->
 
 <!-- POULES -->
 <div id="tab-poules" class="hidden">
@@ -742,8 +759,17 @@ function switchT(id){
   const isHidden=tabBtn&&tabBtn.classList.contains('hidden');
   showTab((!tabBtn||isHidden)?( fmt==='interclub'?'interclub':'planning'):tabToShow);
 }
+function confirmDeleteT(){
+  const t=T();if(!t)return;
+  // First confirmation
+  if(!confirm(`Supprimer le tournoi "${t.name}" ?\n\nToutes les données seront perdues définitivement.`)) return;
+  // Second confirmation
+  if(!confirm(`Êtes-vous vraiment sûr de vouloir supprimer "${t.name}" ?\n\nCette action est irréversible.`)) return;
+  deleteT(activeTid);
+}
+
 function deleteT(id,e){
-  e.stopPropagation();
+  if(e) e.stopPropagation();
   if(tournaments.length===1){toast('Il faut au moins un tournoi','#e05c3a');return;}
   tournaments=tournaments.filter(t=>t.id!==id);
   if(activeTid===id) switchT(tournaments[tournaments.length-1].id);
@@ -752,7 +778,7 @@ function deleteT(id,e){
 function renderTBar(){
   document.getElementById('t-chips').innerHTML=tournaments.map(t=>
     `<div class="t-chip ${t.id===activeTid?'active':''}" onclick="switchT('${t.id}')">
-      ${t.name}<span class="t-del" onclick="deleteT('${t.id}',event)">✕</span>
+      ${t.name}
     </div>`).join('');
 }
 
