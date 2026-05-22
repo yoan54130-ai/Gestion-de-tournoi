@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -736,11 +736,11 @@ function switchT(id){
   selectFormat(fmt);
   renderPlayerList();
   // Restore the last active tab for this tournament
-  const tabToShow=t.activeTab||( fmt==='interclub'?'interclub':'setup');
+  const tabToShow=t.activeTab||( fmt==='interclub'?'interclub':'planning');
   // Validate the tab is currently visible before restoring
   const tabBtn=document.getElementById('tab-btn-'+tabToShow);
   const isHidden=tabBtn&&tabBtn.classList.contains('hidden');
-  showTab((!tabBtn||isHidden)?( fmt==='interclub'?'interclub':'setup'):tabToShow);
+  showTab((!tabBtn||isHidden)?( fmt==='interclub'?'interclub':'planning'):tabToShow);
 }
 function deleteT(id,e){
   e.stopPropagation();
@@ -2393,19 +2393,20 @@ function propagateBracket(b){
 //  PLANNING
 // ══════════════════════════════════════════════════════
 function schedPlan(items,nT){
-  // items: array of {players:[], played, ...}
-  const unplayed=items.filter(it=>!it.played);
-  const total=unplayed.length;
-  if(!total)return[];
+  // Schedule ALL items (played + unplayed) for a persistent display.
+  // Played items keep their slot; unplayed are optimized for rest.
+  // Returns slots array — items never disappear once scheduled.
+  if(!items.length) return [];
+  const total=items.length;
   const sched=new Array(total).fill(false);
   const slots=[],last={};let rem=total,si=0;
   while(rem>0){
     const slot=[],busy=new Set();
     for(let tr=0;tr<nT;tr++){
       let best=null,bS=-Infinity;
-      for(let i=0;i<unplayed.length;i++){
+      for(let i=0;i<items.length;i++){
         if(sched[i])continue;
-        const it=unplayed[i];
+        const it=items[i];
         if(it.players.some(p=>busy.has(p)))continue;
         const rests=it.players.map(p=>last[p]!==undefined?si-last[p]-1:Infinity);
         const minR=Math.min(...rests);
@@ -2428,33 +2429,42 @@ function renderPlanning(){
   const container=document.getElementById('planning-container');
   const t=T();if(!t)return;
 
-  // Load per-tournament terrains count
   loadTerrainsCount();
   const nT=Math.max(1,parseInt(document.getElementById('num-terrains')?.value)||2);
 
-  // Collect all matches: poules + bracket + consolante
+  // Collect ALL matches (played + unplayed)
   const allItems=collectAllMatches(t);
   if(!allItems.length){
     container.innerHTML='<div class="alert alert-warn">Démarrez le tournoi pour voir le planning.</div>';return;
   }
 
-  const playedItems=allItems.filter(it=>it.played);
-  const unplayedItems=allItems.filter(it=>!it.played);
-  const slots=schedPlan(allItems,nT);
+  // Use persistent schedule stored on tournament; rebuild only if missing or nT changed
+  if(!t._planningSchedule||t._planningNT!==nT||t._planningCount!==allItems.length){
+    t._planningSchedule=schedPlan(allItems,nT);
+    t._planningNT=nT;
+    t._planningCount=allItems.length;
+  }
+  const slots=t._planningSchedule;
 
-  // Player timeline (only for poule+bracket players who play multiple matches)
+  // Build a lookup map: key → current item state (played/score)
+  // The schedule stores item references; we refresh played/score from allItems each render
+  const itemKey=it=>it.onclick; // unique per match
+  const currentState={};
+  allItems.forEach(it=>{currentState[itemKey(it)]=it;});
+
+  // Player timeline
   const playerSlots={};
   slots.forEach((slot,si)=>{
     slot.forEach(e=>{
       if(!e)return;
-      e.item.players.forEach(p=>{
+      const cur=currentState[itemKey(e.item)]||e.item;
+      cur.players.forEach(p=>{
         if(!playerSlots[p])playerSlots[p]=[];
         playerSlots[p].push(si);
       });
     });
   });
 
-  // Type badge colors
   function typeBadge(type){
     if(type==='poule') return 'var(--accent3)';
     if(type==='wb') return 'var(--accent)';
@@ -2463,6 +2473,7 @@ function renderPlanning(){
     return 'var(--purple)';
   }
 
+  const playedCount=allItems.filter(it=>it.played).length;
   const totalSlots=slots.length;
   let html=`<div class="planning-legend">
     <div class="legend-item"><div class="legend-dot" style="background:rgba(79,196,207,.3);border:1px solid var(--accent3)"></div>Poule</div>
@@ -2470,8 +2481,8 @@ function renderPlanning(){
     <div class="legend-item"><div class="legend-dot" style="background:rgba(224,92,58,.3);border:1px solid var(--accent2)"></div>LB</div>
     <div class="legend-item"><div class="legend-dot" style="background:rgba(155,108,255,.3);border:1px solid var(--purple)"></div>Consolante</div>
     <div class="legend-item" style="margin-left:auto;color:var(--text)">
-      <strong>${totalSlots}</strong> créneaux · <strong>${nT}</strong> terrain(s) · 
-      <strong>${playedItems.length}</strong>/<strong>${allItems.length}</strong> joués
+      <strong>${totalSlots}</strong> créneaux · <strong>${nT}</strong> terrain(s) ·
+      <strong>${playedCount}</strong>/<strong>${allItems.length}</strong> joués
     </div>
   </div>`;
 
@@ -2486,14 +2497,15 @@ function renderPlanning(){
       <div class="slot-terrain-grid" style="grid-template-columns:repeat(${nT},1fr);flex:1">`;
     slot.forEach(e=>{
       if(!e){html+=`<div class="slot-match-cell empty-cell">—</div>`;return;}
-      const it=e.item;
-      const hasWarn=e.rests&&e.rests.some(r=>r===0);
+      // Always fetch current state from allItems (score/played may have changed)
+      const it=currentState[itemKey(e.item)]||e.item;
+      const hasWarn=!it.played&&e.rests&&e.rests.some(r=>r===0);
       const badgeColor=typeBadge(it.type);
-      html+=`<div class="slot-match-cell" onclick="${it.onclick}">
+      html+=`<div class="slot-match-cell ${it.played?'played-cell':''}" onclick="${it.onclick}">
         <div class="cell-players">
-          <span class="cell-p">${it.p1}</span>
+          <span class="cell-p" style="${it.played&&it.score&&it.score.split('–')[0]>it.score.split('–')[1]?'color:var(--win);font-weight:700':''}">${it.p1}</span>
           <span class="cell-vs">vs</span>
-          <span class="cell-p">${it.p2}</span>
+          <span class="cell-p" style="${it.played&&it.score&&it.score.split('–')[1]>it.score.split('–')[0]?'color:var(--win);font-weight:700':''}">${it.p2}</span>
           ${hasWarn?`<span class="rest-warning">⚡ 0 repos</span>`:''}
         </div>
         <span class="cell-poule-tag" style="border-color:${badgeColor};color:${badgeColor}">${it.label}</span>
@@ -3565,9 +3577,10 @@ function saveTerrainsCount(){
   const n=parseInt(document.getElementById('num-terrains')?.value)||2;
   const old=t.numTerrains||2;
   t.numTerrains=n;
-  // Rebuild schedule if terrain count changed
   if(n!==old){
+    // Rebuild poule-level schedules and clear planning cache
     t.poulePhases.forEach(phase=>{if(!phase.isLigue) rebuildPouleSchedule(phase);});
+    delete t._planningSchedule;
   }
 }
 
@@ -3595,6 +3608,7 @@ function resetTournamentPhases(){
   // Remove bracket/consolante
   t.bracket=null; t.consolanteBracket=null; t.consolantePhase=null;
   t.history=[];
+  delete t._planningSchedule;
   // Reset phase label
   t.currentPhase='poules';
   document.getElementById('phase-label').textContent=t.format==='ligue'?'PHASE DE LIGUE':'PHASE DE POULES';
@@ -3810,10 +3824,10 @@ if(_initT2){
   document.getElementById('tab-btn-phase2').classList.toggle('hidden',(_initT2.poulePhases?.length||0)<2);
   document.getElementById('tab-btn-interclub').classList.toggle('hidden',!_initT2.interclub?.started);
   // Restore last active tab (validate it's accessible first)
-  const savedTab=_initT2.activeTab||'setup';
+  const savedTab=_initT2.activeTab||'planning';
   const tabBtn=document.getElementById('tab-btn-'+savedTab);
   const tabHidden=tabBtn&&tabBtn.classList.contains('hidden');
-  const defaultTab=_initT2.format==='interclub'?'interclub':'setup';
+  const defaultTab=_initT2.format==='interclub'?'interclub':'planning';
   // Use _showTabSilent to avoid re-saving state on init
   const tabToRestore=(!tabBtn||tabHidden)?defaultTab:savedTab;
   // Show without overwriting activeTab
