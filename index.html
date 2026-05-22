@@ -3800,20 +3800,31 @@ if(!loaded){
   const t0=newT('Tournoi 1');
   tournaments.push(t0);activeTid=t0.id;
 }
-// Restore current tournament's format
 const _initT=T();
-if(_initT){
-  currentFormat=_initT.format||'poules';
-}
+if(_initT) currentFormat=_initT.format||'poules';
 renderTBar();renderPlayerList();applyResponsiveLayout();
-// Apply format UI after DOM is ready
 selectFormat(currentFormat);
-// Show dynamic tabs if needed
+// Restore dynamic tabs visibility
 const _initT2=T();
 if(_initT2){
   document.getElementById('tab-btn-phase2').classList.toggle('hidden',(_initT2.poulePhases?.length||0)<2);
   document.getElementById('tab-btn-interclub').classList.toggle('hidden',!_initT2.interclub?.started);
-  if(_initT2.interclub?.started) showTab('interclub');
+  // Restore last active tab (validate it's accessible first)
+  const savedTab=_initT2.activeTab||'setup';
+  const tabBtn=document.getElementById('tab-btn-'+savedTab);
+  const tabHidden=tabBtn&&tabBtn.classList.contains('hidden');
+  const defaultTab=_initT2.format==='interclub'?'interclub':'setup';
+  // Use _showTabSilent to avoid re-saving state on init
+  const tabToRestore=(!tabBtn||tabHidden)?defaultTab:savedTab;
+  // Show without overwriting activeTab
+  TABS.forEach(t=>document.getElementById('tab-'+t).classList.toggle('hidden',t!==tabToRestore));
+  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',TABS[i]===tabToRestore));
+  if(tabToRestore==='classement') renderClassement();
+  else if(tabToRestore==='poules') renderPoules();
+  else if(tabToRestore==='planning'){loadTerrainsCount();renderPlanning();}
+  else if(tabToRestore==='elimination') renderBracket();
+  else if(tabToRestore==='phase2') renderPhase2();
+  else if(tabToRestore==='interclub') renderInterclub();
 }
 if(loaded&&tournaments.length){
   setTimeout(()=>toast(`✓ ${tournaments.length} tournoi(s) restauré(s) depuis la mémoire`,'#3ecf8e'),500);
