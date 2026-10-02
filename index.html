@@ -1403,7 +1403,9 @@ function renderClassicPoules(phase, phI, t){
   // Ensure a persistent per-terrain schedule exists
   ensurePouleSchedule(phase,t);
 
-  let html='';
+  let html=`<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+    <button class="btn btn-ghost btn-sm" onclick="openReorderModal(${phI})">⇄ Modifier les poules manuellement</button>
+  </div>`;
 
   // ── Per-poule: rounds + standings ──
   html+=phase.poules.map((po,pi)=>{
@@ -1460,9 +1462,6 @@ function renderClassicPoules(phase, phI, t){
   const nT=t.numTerrains||2;
   if(schedule.length>0){
     html+=`<div class="b-section-lbl" style="margin-top:24px"><span>Planning</span> par terrain</div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
-      <button class="btn btn-ghost btn-sm" onclick="openReorderModal(${phI})">⇄ Réorganiser les poules</button>
-    </div>
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;min-width:${nT*160+64}px">
       <thead><tr>
@@ -3542,7 +3541,7 @@ function renderReorderModal(phase){
       ${players.map(d=>{
         const isSelected=_reorderSelected&&_reorderSelected.name===d.name;
         return`<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;margin-bottom:3px;background:${isSelected?'rgba(240,192,64,.15)':'var(--surface)'};border:1px solid ${isSelected?'var(--accent)':'var(--border)'};cursor:pointer"
-          onclick="toggleReorderPlayer('${d.name}',${pi})">
+          onclick="toggleReorderPlayer(${_reorderDraft.indexOf(d)},${pi})">
           <span style="flex:1;font-size:.85rem;font-weight:${isSelected?'700':'400'}">${d.name}</span>
           ${isSelected?`<span style="font-size:.68rem;color:var(--accent)">Sélectionné — cliquez sur une poule cible</span>`:''}
         </div>`;}).join('')}
@@ -3552,8 +3551,9 @@ function renderReorderModal(phase){
   container.innerHTML=html;
 }
 
-function toggleReorderPlayer(name,pi){
+function toggleReorderPlayer(idx,pi){
   const t=T();if(!t)return;
+  const name=_reorderDraft[idx].name;
   const phase=t.poulePhases[_reorderPhaseIdx];
   if(_reorderSelected&&_reorderSelected.name===name){
     _reorderSelected=null;
@@ -3585,13 +3585,29 @@ function moveReorderPlayer(targetPoule){
 function applyReorder(){
   const t=T();if(!t)return;
   const phase=t.poulePhases[_reorderPhaseIdx];
-  // Apply draft to phase.poules
+  const newPlayers=phase.poules.map((po,pi)=>_reorderDraft.filter(d=>d.pouleIdx===pi).map(d=>d.name));
+  const sameSet=(a,b)=>a.length===b.length&&[...a].sort().join('\u0000')===[...b].sort().join('\u0000');
+  const changed=phase.poules.map((po,pi)=>!sameSet(po.players,newPlayers[pi]));
+  if(!changed.some(Boolean)){closeReorderModal();return;}
+  const lost=phase.poules.reduce((n,po,pi)=>n+(changed[pi]?po.matches.filter(m=>m.played).length:0),0);
+  if(lost&&!confirm(`${lost} score(s) saisi(s) dans les poules modifiées seront effacés. Continuer ?`))return;
+  // Rebuild only the poules whose composition changed (others keep their scores)
   phase.poules.forEach((po,pi)=>{
-    po.players=_reorderDraft.filter(d=>d.pouleIdx===pi).map(d=>d.name);
-    po.matches=rrMatches(po.players); // Rebuild matches for new composition
+    if(!changed[pi])return;
+    po.players=newPlayers[pi];
+    po.matches=rrMatches(po.players);
+  });
+  // Recompute establishment conflicts
+  const etabOf={};(t.players||[]).forEach(p=>{if(p&&p.name)etabOf[p.name]=p.etablissement||'';});
+  phase.etabConflicts=[];
+  phase.poules.forEach(po=>{
+    const ec={};
+    po.players.forEach(nm=>{const e=etabOf[nm];if(e)ec[e]=(ec[e]||0)+1;});
+    Object.entries(ec).forEach(([e,c])=>{if(c>1)phase.etabConflicts.push(`${c}× ${e} dans ${po.name}`);});
   });
   // Rebuild schedule
   rebuildPouleSchedule(phase);
+  delete t._planningSchedule;
   closeReorderModal();
   renderPoules();
   saveState();
