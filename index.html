@@ -249,6 +249,15 @@ tbody td{padding:7px 10px}
 .seed-move-btn:active{background:var(--surface2)}
 @media print{header,nav,#tournament-bar,.btn,#toast-container,#save-dot{display:none!important}body{background:#fff;color:#000}.slot-match-cell,.slot-num{border-color:#ccc;background:#fff}main{padding:10px}}
 
+/* ── ONGLETS DE MODE ── */
+#mode-tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin:0 10px;flex:1;min-width:0}
+#mode-tabs::-webkit-scrollbar{display:none}
+.mode-tab{display:flex;align-items:center;gap:5px;font-size:.7rem;font-weight:700;letter-spacing:.5px;padding:6px 10px;border-radius:16px;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--muted);white-space:nowrap;touch-action:manipulation}
+.mode-tab.active{background:rgba(240,192,64,.15);border-color:var(--accent);color:var(--accent)}
+.mode-tab .mt-dot{width:6px;height:6px;border-radius:50%;background:var(--win)}
+.mode-tab .mt-n{opacity:.6;font-weight:400}
+header{flex-wrap:wrap;row-gap:8px}
+@media(max-width:560px){#mode-tabs{order:3;flex:1 0 100%;margin:0}.mode-tab{flex:1;justify-content:center;padding:7px 8px}}
 /* ── TOURNOI GÉANT ── */
 .gt-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .gt-teams{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;margin:14px 0}
@@ -272,6 +281,7 @@ summary{outline:none}
 
 <header>
   <div class="logo">Tournament<span>Master</span></div>
+  <div id="mode-tabs"></div>
   <div class="phase-badge active" id="phase-label">SETUP</div>
 </header>
 
@@ -295,7 +305,7 @@ summary{outline:none}
   <div class="section-sub">Choisissez le format et ajoutez les joueurs</div>
 
   <!-- FORMAT SELECTOR -->
-  <div class="card" style="margin-bottom:14px">
+  <div class="card hidden" id="fmt-card" style="margin-bottom:14px">
     <div class="card-title">🏆 Format du tournoi</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <div class="phase-option selected" id="fmt-poules" onclick="selectFormat('poules')" style="flex:1;min-width:130px;padding:14px 12px">
@@ -778,8 +788,8 @@ summary{outline:none}
 // ══════════════════════════════════════════════════════
 let tournaments=[], activeTid=null;
 function T(){return tournaments.find(t=>t.id===activeTid);}
-function newT(name){
-  return{id:'T'+Date.now()+Math.random().toString(36).slice(2,5),name,
+function newT(name,mode){
+  return{id:'T'+Date.now()+Math.random().toString(36).slice(2,5),name,mode:mode||'poules',
     players:[],poulePhases:[],ptsWin:3,ptsDraw:1,currentPhase:'setup',
     bracket:null,history:[]};
 }
@@ -791,19 +801,21 @@ function createTournament(){
 function confirmNewT(){
   const name=document.getElementById('new-t-name').value.trim()||`Tournoi ${tournaments.length+1}`;
   document.getElementById('modal-new-t').classList.add('hidden');
-  const t=newT(name); tournaments.push(t); switchT(t.id);
+  const t=newT(name,tMode(T())); tournaments.push(t); switchT(t.id);
   renderTBar(); toast(`Tournoi "${name}" créé !`);
 }
 function switchT(id){
-  activeTid=id; renderTBar();
+  activeTid=id;
   const t=T();
+  t.activeAt=Date.now();
+  renderTBar();
   document.getElementById('phase-label').textContent=
     t.currentPhase==='setup'?'SETUP':
     t.currentPhase==='poules'?(t.format==='ligue'?'PHASE DE LIGUE':'PHASE DE POULES'):
     t.currentPhase==='interclub'?'INTERCLUB':
     t.currentPhase==='geant'?'TOURNOI GÉANT':
     t.currentPhase==='elimination'?(t.bracket?.isDouble?'DOUBLE ÉLIMINATION':'ÉLIMINATION DIRECTE'):'SETUP';
-  const fmt=t.format||'poules';
+  const fmt=t.format||tMode(t);
   currentFormat=fmt;
   currentPoulePhaseIdx=-1;
   document.getElementById('tab-btn-phase2').classList.toggle('hidden',t.poulePhases.length<2);
@@ -811,7 +823,8 @@ function switchT(id){
   applyFormatTabs();
   selectFormat(fmt);
   renderPlayerList();
-  const dfltTab=fmt==='interclub'?'interclub':fmt==='geant'?'geant':'planning';
+  const started=t.currentPhase&&t.currentPhase!=='setup';
+  const dfltTab=!started?'setup':fmt==='interclub'?'interclub':fmt==='geant'?'geant':'planning';
   // Restore the last active tab for this tournament
   const tabToShow=t.activeTab||dfltTab;
   // Validate the tab is currently visible before restoring
@@ -831,15 +844,45 @@ function confirmDeleteT(){
 function deleteT(id,e){
   if(e) e.stopPropagation();
   if(tournaments.length===1){toast('Il faut au moins un tournoi','#e05c3a');return;}
+  const gone=tournaments.find(t=>t.id===id);
   tournaments=tournaments.filter(t=>t.id!==id);
-  if(activeTid===id) switchT(tournaments[tournaments.length-1].id);
-  else renderTBar();
+  if(activeTid===id){
+    const mode=gone?tMode(gone):'poules';
+    const same=tournaments.filter(t=>tMode(t)===mode);
+    if(same.length) switchT(same[same.length-1].id);
+    else{const t=newT('Tournoi '+(tournaments.length+1),mode);tournaments.push(t);switchT(t.id);}
+  } else renderTBar();
+}
+// ── Onglets de mode : un par format, chacun garde ses propres tournois ──
+const MODES=[['poules','◈','Poules'],['ligue','⚽','Ligue'],['interclub','🏸','Interclub'],['geant','🌐','Géant']];
+function tMode(t){return (t&&(t.mode||t.format))||'poules';}
+function renderModeTabs(){
+  const cur=tMode(T());
+  document.getElementById('mode-tabs').innerHTML=MODES.map(([m,icon,label])=>{
+    const list=tournaments.filter(t=>tMode(t)===m);
+    const running=list.some(t=>t.currentPhase&&t.currentPhase!=='setup');
+    return`<div class="mode-tab ${m===cur?'active':''}" onclick="setMode('${m}')" title="${label}${list.length?' — '+list.length+' tournoi(s)':''}">
+      <span>${icon}</span><span class="mt-lbl">${label}</span>${running?'<span class="mt-dot" title="Tournoi en cours"></span>':''}${list.length>1?`<span class="mt-n">${list.length}</span>`:''}</div>`;}).join('');
+}
+// Bascule sur un mode : reprend le dernier tournoi de ce mode, ou en crée un vierge
+function setMode(mode){
+  if(tMode(T())===mode) return;
+  const same=tournaments.filter(t=>tMode(t)===mode).sort((a,b)=>(a.activeAt||0)-(b.activeAt||0));
+  if(same.length) switchT(same[same.length-1].id);
+  else{
+    const label=MODES.find(x=>x[0]===mode)[2];
+    const t=newT(label+' 1',mode);tournaments.push(t);switchT(t.id);
+    toast(`Nouveau tournoi ${label} — le précédent est conservé`);
+  }
 }
 function renderTBar(){
-  document.getElementById('t-chips').innerHTML=tournaments.map(t=>
-    `<div class="t-chip ${t.id===activeTid?'active':''}" onclick="switchT('${t.id}')">
-      ${t.name}
-    </div>`).join('');
+  renderModeTabs();
+  document.getElementById('t-chips').innerHTML=tournaments.map(t=>{
+    const m=MODES.find(x=>x[0]===tMode(t));
+    const running=t.currentPhase&&t.currentPhase!=='setup';
+    return`<div class="t-chip ${t.id===activeTid?'active':''}" onclick="switchT('${t.id}')" title="${m[2]}${running?' — en cours':' — non lancé'}">
+      ${m[1]} ${t.name.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}${running?' <span style="color:var(--win)">●</span>':''}
+    </div>`;}).join('');
 }
 
 // ══════════════════════════════════════════════════════
@@ -2835,7 +2878,16 @@ function toast(msg,color){
 const STORAGE_KEY='tournamentmaster_v2';
 let saveTimer=null;
 
+function flushState(){
+  clearTimeout(saveTimer);
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify({tournaments,activeTid}));}catch(e){console.warn('Save failed:',e);}
+}
+// Écrit tout de suite quand la page est quittée ou mise en arrière-plan (évite de perdre le dernier changement)
+window.addEventListener('pagehide',flushState);
+window.addEventListener('beforeunload',flushState);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushState();});
 function saveState(){
+  if(typeof renderTBar==='function'&&T()) renderTBar();   // onglets (pastille « en cours ») toujours à jour
   const dot=document.getElementById('save-dot');
   dot.className='saving';
   clearTimeout(saveTimer);
@@ -3849,7 +3901,7 @@ window.editPN=function(i,v){_origEditPN(i,v);saveState();};
 const _origEditPE=editPE;
 window.editPE=function(i,v){_origEditPE(i,v);saveState();};
 const _origStartTournament=startTournament;
-window.startTournament=function(){_origStartTournament();saveState();};
+window.startTournament=function(){_origStartTournament();saveState();flushState();};
 const _origConfirmSeeding=confirmSeeding;
 window.confirmSeeding=function(){_origConfirmSeeding();saveState();};
 const _origSaveScore=saveScore;
@@ -4572,7 +4624,7 @@ if(!loaded){
   tournaments.push(t0);activeTid=t0.id;
 }
 const _initT=T();
-if(_initT) currentFormat=_initT.format||'poules';
+if(_initT) currentFormat=_initT.format||tMode(_initT);
 renderTBar();renderPlayerList();applyResponsiveLayout();
 selectFormat(currentFormat);
 // Restore dynamic tabs visibility
@@ -4585,7 +4637,8 @@ if(_initT2){
   const savedTab=_initT2.activeTab||'planning';
   const tabBtn=document.getElementById('tab-btn-'+savedTab);
   const tabHidden=tabBtn&&tabBtn.classList.contains('hidden');
-  const defaultTab=_initT2.format==='interclub'?'interclub':_initT2.format==='geant'?'geant':'planning';
+  const _started=_initT2.currentPhase&&_initT2.currentPhase!=='setup';
+  const defaultTab=!_started?'setup':_initT2.format==='interclub'?'interclub':_initT2.format==='geant'?'geant':'planning';
   // Use _showTabSilent to avoid re-saving state on init
   const tabToRestore=(!tabBtn||tabHidden)?defaultTab:savedTab;
   // Show without overwriting activeTab
