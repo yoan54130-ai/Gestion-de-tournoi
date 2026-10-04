@@ -877,11 +877,12 @@ function setMode(mode){
 }
 function renderTBar(){
   renderModeTabs();
-  const cur=tMode(T());
-  document.getElementById('t-chips').innerHTML=tournaments.filter(t=>tMode(t)===cur).map(t=>
-    `<div class="t-chip ${t.id===activeTid?'active':''}" onclick="switchT('${t.id}')">
-      ${t.name}
-    </div>`).join('');
+  document.getElementById('t-chips').innerHTML=tournaments.map(t=>{
+    const m=MODES.find(x=>x[0]===tMode(t));
+    const running=t.currentPhase&&t.currentPhase!=='setup';
+    return`<div class="t-chip ${t.id===activeTid?'active':''}" onclick="switchT('${t.id}')" title="${m[2]}${running?' — en cours':' — non lancé'}">
+      ${m[1]} ${t.name.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}${running?' <span style="color:var(--win)">●</span>':''}
+    </div>`;}).join('');
 }
 
 // ══════════════════════════════════════════════════════
@@ -2877,7 +2878,16 @@ function toast(msg,color){
 const STORAGE_KEY='tournamentmaster_v2';
 let saveTimer=null;
 
+function flushState(){
+  clearTimeout(saveTimer);
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify({tournaments,activeTid}));}catch(e){console.warn('Save failed:',e);}
+}
+// Écrit tout de suite quand la page est quittée ou mise en arrière-plan (évite de perdre le dernier changement)
+window.addEventListener('pagehide',flushState);
+window.addEventListener('beforeunload',flushState);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushState();});
 function saveState(){
+  if(typeof renderTBar==='function'&&T()) renderTBar();   // onglets (pastille « en cours ») toujours à jour
   const dot=document.getElementById('save-dot');
   dot.className='saving';
   clearTimeout(saveTimer);
@@ -3891,7 +3901,7 @@ window.editPN=function(i,v){_origEditPN(i,v);saveState();};
 const _origEditPE=editPE;
 window.editPE=function(i,v){_origEditPE(i,v);saveState();};
 const _origStartTournament=startTournament;
-window.startTournament=function(){_origStartTournament();saveState();};
+window.startTournament=function(){_origStartTournament();saveState();flushState();};
 const _origConfirmSeeding=confirmSeeding;
 window.confirmSeeding=function(){_origConfirmSeeding();saveState();};
 const _origSaveScore=saveScore;
