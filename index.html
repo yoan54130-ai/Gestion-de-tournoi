@@ -248,6 +248,18 @@ tbody td{padding:7px 10px}
 .seed-move-btn{background:var(--surface);border:1px solid var(--border);color:var(--muted);border-radius:3px;padding:2px 7px;cursor:pointer;font-size:.75rem;line-height:1.3;touch-action:manipulation}
 .seed-move-btn:active{background:var(--surface2)}
 @media print{header,nav,#tournament-bar,.btn,#toast-container,#save-dot{display:none!important}body{background:#fff;color:#000}.slot-match-cell,.slot-num{border-color:#ccc;background:#fff}main{padding:10px}}
+
+/* ── TOURNOI GÉANT ── */
+.gt-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.gt-teams{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;margin:14px 0}
+.gt-team{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;font-size:.85rem}
+.gt-team.under{border-color:var(--accent2);background:rgba(224,92,58,.08)}
+.gt-team-lbl{font-size:.58rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.gt-vs{align-self:center;font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--muted)}
+.gt-bonus{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:4px;color:var(--accent2);line-height:1.1}
+.gt-score-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.gt-badge{display:inline-block;font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:8px;white-space:nowrap;margin-left:3px;vertical-align:middle}
+summary{outline:none}
 </style>
 </head>
 <body>
@@ -271,6 +283,7 @@ tbody td{padding:7px 10px}
   <div class="tab" onclick="showTab('elimination')"><span class="tab-icon">⚡</span><span class="tab-label">Élimination</span></div>
   <div class="tab hidden" id="tab-btn-phase2" onclick="showTab('phase2')"><span class="tab-icon">◈◈</span><span class="tab-label">Phase 2</span></div>
   <div class="tab hidden" id="tab-btn-interclub" onclick="showTab('interclub')"><span class="tab-icon">🏸</span><span class="tab-label">Interclub</span></div>
+  <div class="tab hidden" id="tab-btn-geant" onclick="showTab('geant')"><span class="tab-icon">🌐</span><span class="tab-label">Géant</span></div>
 </nav>
 <div id="save-dot" class="hidden-dot" title="Données sauvegardées"></div>
 
@@ -299,6 +312,11 @@ tbody td{padding:7px 10px}
         <div class="phase-option-icon">🏸</div>
         <div class="phase-option-title">Interclub</div>
         <div class="phase-option-desc">Rencontres par équipes, matchs par poule</div>
+      </div>
+      <div class="phase-option" id="fmt-geant" onclick="selectFormat('geant')" style="flex:1;min-width:130px;padding:14px 12px">
+        <div class="phase-option-icon">🌐</div>
+        <div class="phase-option-title">Tournoi Géant</div>
+        <div class="phase-option-desc">Classement ouvert à handicap, sets de 15 pts</div>
       </div>
     </div>
   </div>
@@ -404,6 +422,33 @@ tbody td{padding:7px 10px}
         <div id="ic-info" class="alert alert-info hidden" style="margin-top:8px"></div>
       </div><!-- /config-interclub -->
 
+      <!-- CONFIG TOURNOI GÉANT -->
+      <div class="card hidden" id="config-geant">
+        <div class="card-title">🌐 Configuration Tournoi Géant</div>
+        <div id="gt-live-note" class="alert alert-warn hidden">Un Tournoi Géant est en cours dans l'onglet <strong>Géant</strong>. « Démarrer » le réinitialisera (matchs et points effacés).</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-row"><label class="form-label">Nombre de joueurs</label><input type="number" id="gt-num" value="24" min="2" max="500" onchange="gtSetCount(this.value)" style="width:100%"></div>
+          <div class="form-row"><label class="form-label">Points par set</label>
+            <select id="gt-target" onchange="gtCfgChanged(false)" style="width:100%"><option value="11">11 points</option><option value="15" selected>15 points</option><option value="21">21 points</option></select></div>
+          <div class="form-row"><label class="form-label">Handicap max (pts)</label><input type="number" id="gt-maxbonus" value="8" min="0" max="19" onchange="gtCfgChanged(true)" style="width:100%"></div>
+          <div class="form-row"><label class="form-label">Même duel le même jour</label>
+            <select id="gt-blockdup" onchange="gtCfgChanged(true)" style="width:100%"><option value="1">Interdit</option><option value="0">Autorisé</option></select></div>
+        </div>
+        <div id="gt-info" class="alert alert-info"></div>
+        <div class="card-title" style="margin-top:6px">👥 Joueurs — l'ordre définit le classement de départ</div>
+        <div id="gt-roster"></div>
+        <div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="gtDraftShuffle()">🔀 Mélanger l'ordre</button>
+          <button class="btn btn-ghost btn-sm" onclick="gtEl('gt-paste-box').classList.toggle('hidden')">📋 Coller une liste</button>
+          <button class="btn btn-ghost btn-sm" onclick="gtDraftReset()">↺ Noms par défaut</button>
+        </div>
+        <div id="gt-paste-box" class="hidden" style="margin-top:10px">
+          <div class="form-label" style="margin-bottom:5px">Un joueur par ligne · ajoutez « ;F » pour une joueuse (sinon H)</div>
+          <textarea id="gt-paste" rows="6" placeholder="Alice Martin;F&#10;Bob Durand&#10;…" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:10px;font-family:inherit;font-size:.9rem"></textarea>
+          <button class="btn btn-primary btn-sm" style="margin-top:6px" onclick="gtDraftImport()">Importer la liste</button>
+        </div>
+      </div><!-- /config-geant -->
+
       <!-- LANCER -->
       <div class="card">
         <div class="card-title">🚀 Lancer</div>
@@ -478,7 +523,19 @@ tbody td{padding:7px 10px}
   <div id="interclub-container"></div>
 </div>
 
+<!-- TOURNOI GÉANT -->
+<div id="tab-geant" class="hidden">
+  <div class="section-title"><span>Tournoi</span> Géant</div>
+  <div class="section-sub" id="gt-sub"></div>
+  <div id="gt-bars"></div>
+  <div id="gt-view"></div>
+</div>
+
 </main>
+
+<div id="gt-modal" class="modal-overlay hidden" onclick="if(event.target===this)gtCloseModal()">
+  <div class="modal" id="gt-modal-body"></div>
+</div>
 
 <!-- MODAL: Score poule -->
 <div id="modal-score" class="modal-overlay hidden">
@@ -744,20 +801,23 @@ function switchT(id){
     t.currentPhase==='setup'?'SETUP':
     t.currentPhase==='poules'?(t.format==='ligue'?'PHASE DE LIGUE':'PHASE DE POULES'):
     t.currentPhase==='interclub'?'INTERCLUB':
+    t.currentPhase==='geant'?'TOURNOI GÉANT':
     t.currentPhase==='elimination'?(t.bracket?.isDouble?'DOUBLE ÉLIMINATION':'ÉLIMINATION DIRECTE'):'SETUP';
   const fmt=t.format||'poules';
   currentFormat=fmt;
   currentPoulePhaseIdx=-1;
   document.getElementById('tab-btn-phase2').classList.toggle('hidden',t.poulePhases.length<2);
   document.getElementById('tab-btn-interclub').classList.toggle('hidden',!t.interclub?.started);
+  applyFormatTabs();
   selectFormat(fmt);
   renderPlayerList();
+  const dfltTab=fmt==='interclub'?'interclub':fmt==='geant'?'geant':'planning';
   // Restore the last active tab for this tournament
-  const tabToShow=t.activeTab||( fmt==='interclub'?'interclub':'planning');
+  const tabToShow=t.activeTab||dfltTab;
   // Validate the tab is currently visible before restoring
   const tabBtn=document.getElementById('tab-btn-'+tabToShow);
   const isHidden=tabBtn&&tabBtn.classList.contains('hidden');
-  showTab((!tabBtn||isHidden)?( fmt==='interclub'?'interclub':'planning'):tabToShow);
+  showTab((!tabBtn||isHidden)?dfltTab:tabToShow);
 }
 function confirmDeleteT(){
   const t=T();if(!t)return;
@@ -785,7 +845,7 @@ function renderTBar(){
 // ══════════════════════════════════════════════════════
 //  TABS
 // ══════════════════════════════════════════════════════
-const TABS=['setup','poules','planning','classement','elimination','phase2','interclub'];
+const TABS=['setup','poules','planning','classement','elimination','phase2','interclub','geant'];
 function showTab(name){
   TABS.forEach(t=>document.getElementById('tab-'+t).classList.toggle('hidden',t!==name));
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',TABS[i]===name));
@@ -797,6 +857,7 @@ function showTab(name){
   if(name==='elimination') renderBracket();
   if(name==='phase2') renderPhase2();
   if(name==='interclub') renderInterclub();
+  if(name==='geant') gtRender();
 }
 
 // ══════════════════════════════════════════════════════
@@ -879,18 +940,22 @@ let currentFormat='poules'; // 'poules' | 'ligue' | 'interclub'
 
 function selectFormat(fmt){
   currentFormat=fmt;
-  ['poules','ligue','interclub'].forEach(f=>{
+  ['poules','ligue','interclub','geant'].forEach(f=>{
     document.getElementById('fmt-'+f)?.classList.toggle('selected',f===fmt);
   });
   document.getElementById('config-poules-classic').classList.toggle('hidden',fmt!=='poules');
   document.getElementById('config-ligue').classList.toggle('hidden',fmt!=='ligue');
   document.getElementById('config-interclub').classList.toggle('hidden',fmt!=='interclub');
-  // Hide player list for interclub (teams manage their own players)
-  document.getElementById('setup-col1').classList.toggle('hidden',fmt==='interclub');
+  document.getElementById('config-geant').classList.toggle('hidden',fmt!=='geant');
+  // Hide player list for interclub (teams manage their own players) and Géant (own roster with gender)
+  document.getElementById('setup-col1').classList.toggle('hidden',fmt==='interclub'||fmt==='geant');
   const desc=document.getElementById('launch-desc');
   if(fmt==='ligue'){
     desc.innerHTML='Chaque joueur affronte un nombre défini d\'adversaires dans une <strong style="color:var(--accent)">poule unique</strong>. Les têtes de série sont protégées et s\'affrontent en dernier.';
     updateLigueInfo();
+  } else if(fmt==='geant'){
+    desc.innerHTML='Classement ouvert : tout le monde peut défier tout le monde. L\'équipe la moins bien classée reçoit un <strong style="color:var(--accent)">handicap</strong> de départ. Données enregistrées <strong style="color:var(--accent)">uniquement sur cet appareil</strong>, aucune connexion requise.';
+    gtRenderSetup();
   } else if(fmt==='interclub'){
     desc.innerHTML='Les équipes s\'affrontent en poule. Chaque rencontre se compose de plusieurs matchs individuels.';
     initInterclubMatchTypes();
@@ -941,6 +1006,10 @@ function startTournament(){
   const t=T();if(!t)return;
   if(currentFormat==='interclub'){
     startInterclubTournament();
+    return;
+  }
+  if(currentFormat==='geant'){
+    startGeantTournament();
     return;
   }
   if(t.players.length<2){toast('Ajoutez au moins 2 joueurs','#e05c3a');return;}
@@ -3850,6 +3919,652 @@ if('serviceWorker' in navigator){
   navigator.serviceWorker.register(swURL).catch(()=>{});
 }
 
+// ══════════════════════════════════════════════════════
+//  TOURNOI GÉANT — classement ouvert avec handicap
+//  100 % local : aucune requête réseau, tout est dans le navigateur
+//  (localStorage via saveState) + export / import JSON.
+//  Les points, séries et classements sont recalculés en rejouant
+//  l'historique : corriger ou supprimer un match reste toujours cohérent.
+// ══════════════════════════════════════════════════════
+const GT_MAX_PLAYERS=500;
+const GT_MODES={double:'🏸 Double',simple:'🎯 Simple'};
+const GT_VIEWS=[['classement','🏆 Classement'],['match','⚡ Saisir match'],['stats','📊 Stats'],['historique','📜 Historique'],['joueurs','👥 Joueurs'],['reglages','⚙ Réglages']];
+let gtForm={ids:['','','',''],noH:false,calc:null,pendingId:null};
+let gtSearch='',gtHistoSearch='',gtStatsView='current',gtCache={},gtEditing=null;
+
+// ── helpers ──────────────────────────────────────────
+const gtEl=id=>document.getElementById(id);
+function gtEsc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function gtCap(target){return target>=21?30:target+6;}            // plafond du set (21→30, 15→21, 11→17)
+function gtDefaultBonus(target){return Math.round(11*target/21);}  // handicap max proportionnel (21→11, 15→8)
+function gtG(){const t=T();return t&&t.geant&&t.geant.started?t.geant:null;}
+function gtP(id){return gtG().players.find(p=>p.id===id);}
+function gtName(id){const p=gtP(id);return p?p.name:'?';}
+function gtCmp(a,b){return a.ts-b.ts||a.seq-b.seq;}
+function gtTouch(){gtCache={};saveState();}
+function gtMonthKey(ts){const d=new Date(ts);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+function gtDay(ts){return gtMonthKey(ts)+'-'+String(new Date(ts).getDate()).padStart(2,'0');}
+function gtPrevMonthKey(){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);return gtMonthKey(d.getTime());}
+function gtMonthLabel(k){const mo=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];const[y,m]=k.split('-');return mo[+m-1]+' '+y;}
+function gtIsF(p){return p&&String(p.gender).toUpperCase()==='F';}
+
+// ══════════════════════════════════════════════════════
+//  CONFIGURATION (onglet Paramètres)
+// ══════════════════════════════════════════════════════
+function gtDraft(){
+  const t=T();
+  if(!t.geantDraft){
+    const g=t.geant;   // réglages du tournoi en cours, sinon valeurs par défaut
+    t.geantDraft=g?{target:g.cfg.target,maxBonus:g.cfg.maxBonus,blockDup:g.cfg.blockDup,players:g.players.map(p=>({name:p.name,gender:p.gender}))}
+                   :{target:15,maxBonus:gtDefaultBonus(15),blockDup:true,players:[]};
+  }
+  const d=t.geantDraft;
+  if(!d.players.length) gtFillDraft(d,24);
+  return d;
+}
+function gtFillDraft(d,n){
+  while(d.players.length>n) d.players.pop();
+  let k=1;
+  while(d.players.length<n){
+    let name;do{name='Joueur '+(k++);}while(d.players.some(p=>p.name===name));
+    d.players.push({name,gender:'H'});
+  }
+}
+function gtRenderSetup(){
+  const t=T();if(!t||!gtEl('config-geant'))return;
+  const d=gtDraft();
+  gtEl('gt-num').value=d.players.length;
+  gtEl('gt-target').value=String(d.target);
+  gtEl('gt-maxbonus').value=d.maxBonus;
+  gtEl('gt-blockdup').value=d.blockDup?'1':'0';
+  gtEl('gt-live-note').classList.toggle('hidden',!gtG());
+  gtRenderRoster();
+}
+function gtRenderRoster(){
+  const d=gtDraft();
+  gtEl('gt-roster').innerHTML=d.players.map((p,i)=>`
+    <div class="player-row">
+      <span class="player-num">${i+1}</span>
+      <input type="text" value="${gtEsc(p.name)}" maxlength="40" onchange="gtDraftName(${i},this.value)" style="flex:2;min-width:70px">
+      <select onchange="gtDraftGender(${i},this.value)" style="padding:6px 8px;font-size:.85rem">
+        <option value="H"${p.gender==='H'?' selected':''}>H</option><option value="F"${p.gender==='F'?' selected':''}>F</option>
+      </select>
+      <button class="btn btn-danger btn-sm" onclick="gtDraftRemove(${i})">✕</button>
+    </div>`).join('');
+  const f=d.players.filter(p=>p.gender==='F').length;
+  const cap=gtCap(d.target);
+  gtEl('gt-info').innerHTML=`✓ <strong>${d.players.length}</strong> joueurs (${d.players.length-f} H · ${f} F) · sets de <strong>${d.target}</strong> points `+
+    `(2 pts d'écart, plafond ${cap}) · handicap max <strong>${d.maxBonus}</strong> pts`;
+}
+function gtSetCount(v){
+  const d=gtDraft();
+  let n=parseInt(v);
+  if(isNaN(n)||n<2){toast('Minimum 2 joueurs','#e05c3a');gtEl('gt-num').value=d.players.length;return;}
+  if(n>GT_MAX_PLAYERS){toast(`Maximum ${GT_MAX_PLAYERS} joueurs`,'#e05c3a');n=GT_MAX_PLAYERS;}
+  // Réduire la liste supprime les derniers joueurs : on confirme si certains ont un nom personnalisé
+  const lost=d.players.slice(n).filter(p=>!/^Joueur \d+$/.test(p.name));
+  if(lost.length&&!confirm(`Retirer ${lost.length} joueur(s) nommé(s) de la fin de la liste (${lost.slice(0,3).map(p=>p.name).join(', ')}${lost.length>3?'…':''}) ?`)){
+    gtEl('gt-num').value=d.players.length;return;
+  }
+  gtFillDraft(d,n);gtEl('gt-num').value=n;
+  gtRenderRoster();saveState();
+}
+function gtCfgChanged(manualBonus){
+  const d=gtDraft();
+  d.target=parseInt(gtEl('gt-target').value)||15;
+  if(manualBonus){const b=parseInt(gtEl('gt-maxbonus').value);d.maxBonus=isNaN(b)?0:Math.max(0,Math.min(b,d.target-2));}
+  else{d.maxBonus=gtDefaultBonus(d.target);gtEl('gt-maxbonus').value=d.maxBonus;}
+  d.blockDup=gtEl('gt-blockdup').value==='1';
+  gtRenderRoster();saveState();
+}
+function gtDraftName(i,v){
+  const d=gtDraft();v=v.trim();
+  if(!v||d.players.some((p,j)=>j!==i&&p.name.toLowerCase()===v.toLowerCase())){
+    toast(v?'Ce nom existe déjà':'Le nom ne peut pas être vide','#e05c3a');gtRenderRoster();return;
+  }
+  d.players[i].name=v;saveState();
+}
+function gtDraftGender(i,v){const d=gtDraft();d.players[i].gender=v;gtRenderRoster();saveState();}
+function gtDraftRemove(i){
+  const d=gtDraft();
+  if(d.players.length<=2){toast('Minimum 2 joueurs','#e05c3a');return;}
+  d.players.splice(i,1);gtEl('gt-num').value=d.players.length;gtRenderRoster();saveState();
+}
+function gtDraftShuffle(){
+  const a=gtDraft().players;
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  gtRenderRoster();saveState();toast('Ordre initial mélangé');
+}
+function gtDraftReset(){
+  const d=gtDraft(),n=d.players.length;d.players=[];gtFillDraft(d,n);gtRenderRoster();saveState();
+}
+function gtDraftImport(){
+  const lines=gtEl('gt-paste').value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const out=[],seen=new Set();
+  lines.forEach(l=>{
+    const parts=l.split(/[;\t]/).map(s=>s.trim());
+    const name=parts[0];if(!name||seen.has(name.toLowerCase()))return;
+    seen.add(name.toLowerCase());
+    out.push({name,gender:/^f/i.test(parts[1]||'')?'F':'H'});
+  });
+  if(out.length<2){toast('Collez au moins 2 noms (un par ligne)','#e05c3a');return;}
+  const d=gtDraft();d.players=out.slice(0,GT_MAX_PLAYERS);
+  gtEl('gt-paste').value='';gtEl('gt-paste-box').classList.add('hidden');
+  gtEl('gt-num').value=d.players.length;gtRenderRoster();saveState();
+  toast(`${d.players.length} joueurs importés`);
+}
+
+function startGeantTournament(){
+  const t=T();if(!t)return;
+  const d=gtDraft(),n=d.players.length;
+  const names=d.players.map(p=>p.name.trim());
+  if(n<2){toast('Minimum 2 joueurs','#e05c3a');return;}
+  if(names.some(x=>!x)||new Set(names.map(x=>x.toLowerCase())).size!==n){toast('Les noms doivent être uniques et non vides','#e05c3a');return;}
+  if(gtG()&&!confirm('Ce Tournoi Géant est déjà en cours.\nLe redémarrer efface tous les matchs et tous les points. Continuer ?'))return;
+  t.geant={
+    started:true,
+    cfg:{target:d.target,cap:gtCap(d.target),maxBonus:d.maxBonus,blockDup:d.blockDup},
+    players:d.players.map((p,i)=>({id:'g'+(i+1),name:names[i],gender:p.gender,startPts:n-i})),   // 1er = n pts, dernier = 1 pt
+    nextId:n+1,seq:0,matches:{double:[],simple:[]},pending:[],ui:{mode:'double',view:'classement'}
+  };
+  t.format='geant';t.currentPhase='geant';
+  gtForm={ids:['','','',''],noH:false,calc:null,pendingId:null};
+  gtSearch='';gtHistoSearch='';
+  gtCache={};
+  gtEl('phase-label').textContent='TOURNOI GÉANT';
+  applyFormatTabs();
+  showTab('geant');
+  saveState();
+  toast(`Tournoi Géant lancé ! 🌐 ${n} joueurs · sets de ${d.target} points`);
+}
+
+// Affiche/masque les onglets selon le format du tournoi actif
+function applyFormatTabs(){
+  const t=T();if(!t)return;
+  const isG=t.format==='geant'&&!!t.geant?.started;
+  const tabs=document.querySelectorAll('nav .tab');
+  ['poules','planning','classement','elimination'].forEach(n=>tabs[TABS.indexOf(n)]?.classList.toggle('hidden',isG));
+  gtEl('tab-btn-geant').classList.toggle('hidden',!isG);
+  if(isG){gtEl('tab-btn-phase2').classList.add('hidden');gtEl('tab-btn-interclub').classList.add('hidden');}
+}
+
+// ══════════════════════════════════════════════════════
+//  MOTEUR : points, rangs, handicap
+// ══════════════════════════════════════════════════════
+// Rejoue tous les matchs d'un mode (dans l'ordre chronologique)
+function gtCompute(mode){
+  const t=T(),g=gtG(),ck=t.id+'|'+mode;
+  if(gtCache[ck]) return gtCache[ck];
+  const st={};
+  g.players.forEach((p,i)=>{st[p.id]={id:p.id,seed:i,start:p.startPts,pts:p.startPts,wins:0,losses:0,streak:0,maxStreak:0};});
+  [...g.matches[mode]].sort(gtCmp).forEach(m=>{
+    (m.winner===1?m.team1:m.team2).forEach(id=>{const s=st[id];if(!s)return;s.pts+=m.ptsWonWinner;s.wins++;s.streak++;if(s.streak>s.maxStreak)s.maxStreak=s.streak;});
+    (m.winner===1?m.team2:m.team1).forEach(id=>{const s=st[id];if(!s)return;s.pts=Math.max(1,s.pts-m.ptsWon);s.losses++;s.streak=0;});
+  });
+  const order=Object.values(st).sort((a,b)=>b.pts-a.pts||a.seed-b.seed);
+  order.forEach((s,i)=>{s.rank=i+1;});
+  return gtCache[ck]={st,order};
+}
+
+// Calcule handicap et gains potentiels pour une affiche donnée
+function gtCalc(mode,ids,noH){
+  const g=gtG(),{st}=gtCompute(mode),simple=mode==='simple';
+  const t1=simple?[ids[0]]:[ids[0],ids[1]],t2=simple?[ids[1]]:[ids[2],ids[3]];
+  const tot=team=>team.reduce((a,id)=>a+st[id].rank,0);
+  const tot1=tot(t1),tot2=tot(t2),diff=Math.abs(tot1-tot2);
+  const underdog=tot1>tot2?1:tot2>tot1?2:0;
+  const rawBonus=Math.ceil(diff/2);
+  const bonus=noH?0:Math.min(rawBonus,g.cfg.maxBonus);
+  const ptsUpset=Math.max(1,Math.ceil(diff/(simple?2:4)));
+  const girls=team=>team.filter(id=>gtIsF(gtP(id))).length;
+  const g1=girls(t1),g2=girls(t2);
+  // Double : l'équipe qui compte une fille de plus. Simple : la joueuse qui affronte un joueur.
+  const advTeam=g1>g2?1:g2>g1?2:0;
+  return{mode,t1,t2,tot1,tot2,diff,underdog,rawBonus,bonus,ptsUpset,advTeam,ranks:[...t1,...t2].map(id=>st[id].rank)};
+}
+
+// Calcule le résultat (vainqueur, points échangés) à partir des scores
+function gtResolve(m){
+  m.winner=m.score1>m.score2?1:2;
+  m.upset=m.underdog>0&&m.winner===m.underdog;
+  m.ptsWon=m.upset?m.ptsUpset:1;                       // le perdant perd toujours ce montant
+  m.girlsBonus=m.advTeam>0&&m.winner===m.advTeam;
+  m.ptsWonWinner=m.girlsBonus?m.ptsWon*2:m.ptsWon;
+}
+
+function gtValidate(s1,s2,cfg){
+  if(isNaN(s1)||isNaN(s2)||s1<0||s2<0) return 'Saisissez les deux scores.';
+  if(s1===s2) return 'Il ne peut pas y avoir égalité.';
+  const W=Math.max(s1,s2),L=Math.min(s1,s2);
+  if(W>cfg.cap) return `Score maximum : ${cfg.cap} points.`;
+  if(W<cfg.target) return `Le score gagnant doit être au moins ${cfg.target}.`;
+  if(W<cfg.cap&&W-L<2) return `Écart minimum de 2 points requis (sauf au plafond de ${cfg.cap}).`;
+  return '';
+}
+
+function gtSameDuel(m,t1,t2){
+  const eq=(a,b)=>a.length===b.length&&a.every(x=>b.includes(x));
+  return(eq(m.team1,t1)&&eq(m.team2,t2))||(eq(m.team1,t2)&&eq(m.team2,t1));
+}
+function gtDupToday(mode,t1,t2){
+  const today=gtDay(Date.now());
+  return gtG().matches[mode].some(m=>gtDay(m.ts)===today&&gtSameDuel(m,t1,t2));
+}
+
+// ── badges ───────────────────────────────────────────
+function gtBadgeCtx(mode){
+  const g=gtG(),{st,order}=gtCompute(mode),ctx={hunter:null,climb:{},hungry:new Set(),king:null,queen:null};
+  let best=2;order.forEach(s=>{if(s.streak>best){best=s.streak;ctx.hunter=s.id;}});
+  const thr=Math.max(3,Math.round(g.players.length/20));
+  let maxGain=thr-1;
+  order.forEach(s=>{const gain=s.seed+1-s.rank;
+    if(gain>maxGain){maxGain=gain;ctx.climb={[s.id]:gain};}
+    else if(gain===maxGain&&gain>=thr) ctx.climb[s.id]=gain;});
+  const mk=gtMonthKey(Date.now()),cnt={};
+  g.matches[mode].forEach(m=>{if(gtMonthKey(m.ts)!==mk)return;[...m.team1,...m.team2].forEach(id=>{cnt[id]=(cnt[id]||0)+1;});});
+  const mx=Math.max(0,...Object.values(cnt));
+  if(mx>0) Object.entries(cnt).forEach(([id,c])=>{if(c===mx)ctx.hungry.add(id);});
+  ctx.king=(order.find(s=>!gtIsF(gtP(s.id)))||{}).id||null;
+  ctx.queen=(order.find(s=>gtIsF(gtP(s.id)))||{}).id||null;
+  return ctx;
+}
+function gtBadges(id,ctx,text){
+  const f=gtIsF(gtP(id)),out=[];
+  const b=(bg,fg,icon,label)=>`<span class="gt-badge" style="background:${bg};color:${fg}">${text?icon+' '+label:icon}</span>`;
+  if(ctx.king===id) out.push(b('rgba(240,192,64,.18)','#f0c040','👑','Roi'));
+  if(ctx.queen===id) out.push(b('rgba(255,105,180,.18)','#ff69b4','👑','Reine'));
+  if(ctx.hunter===id) out.push(b('rgba(224,92,58,.2)','var(--accent2)','🎯',f?'Femme à abattre':'Homme à abattre'));
+  if(ctx.climb[id]) out.push(b('rgba(79,196,207,.15)','var(--accent3)','📈',(f?'Grimpeuse':'Grimpeur')+` (+${ctx.climb[id]})`));
+  if(ctx.hungry.has(id)) out.push(b('rgba(251,191,36,.15)','#f59e0b','🍽️',f?'Morte de faim':'Mort de faim'));
+  return out.join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  RENDU PRINCIPAL
+// ══════════════════════════════════════════════════════
+function gtRender(){
+  const root=gtEl('gt-view');if(!root)return;
+  const g=gtG();
+  if(!g){
+    gtEl('gt-bars').innerHTML='';
+    root.innerHTML='<div class="alert alert-info">Aucun Tournoi Géant en cours. Choisissez le format « Tournoi Géant » dans l\'onglet Paramètres, réglez le nombre de joueurs puis lancez-le.</div>';
+    return;
+  }
+  gtEl('gt-sub').textContent=`${g.players.length} joueurs · sets de ${g.cfg.target} points · handicap max ${g.cfg.maxBonus} · données enregistrées sur cet appareil`;
+  gtEl('gt-bars').innerHTML=
+    `<div class="gt-bar">${Object.entries(GT_MODES).map(([k,l])=>`<div class="t-chip ${g.ui.mode===k?'active':''}" onclick="gtSetMode('${k}')">${l}</div>`).join('')}</div>`+
+    `<div class="gt-bar">${GT_VIEWS.map(([k,l])=>`<div class="t-chip ${g.ui.view===k?'active':''}" onclick="gtSetView('${k}')">${l}</div>`).join('')}</div>`;
+  const views={classement:gtViewClassement,match:gtViewMatch,stats:gtViewStats,historique:gtViewHisto,joueurs:gtViewPlayers,reglages:gtViewSettings};
+  root.innerHTML=(views[g.ui.view]||gtViewClassement)();
+  if(g.ui.view==='match') gtUpdatePreview();
+}
+function gtSetMode(m){
+  const g=gtG();if(!g)return;
+  g.ui.mode=m;gtForm={ids:['','','',''],noH:gtForm.noH,calc:null,pendingId:null};
+  saveState();gtRender();
+}
+function gtSetView(v){const g=gtG();if(!g)return;g.ui.view=v;saveState();gtRender();window.scrollTo({top:0});}
+
+// ── Classement ───────────────────────────────────────
+function gtViewClassement(){
+  const g=gtG(),{order}=gtCompute(g.ui.mode),played=g.matches[g.ui.mode].length;
+  const lead=order[0];
+  const rulesBonus=g.cfg.maxBonus;
+  return`
+  <details class="card" style="margin-bottom:12px">
+    <summary style="cursor:pointer;font-weight:700;font-size:.8rem;letter-spacing:1px;text-transform:uppercase;color:var(--accent)">📖 Comment jouer ?</summary>
+    <div style="margin-top:12px;font-size:.84rem;line-height:1.6;color:var(--muted)">
+      <p>1. Formez vos équipes (2 joueurs en double, 1 contre 1 en simple) — tout le monde peut défier tout le monde.</p>
+      <p>2. Dans <strong style="color:var(--text)">Saisir match</strong>, choisissez les joueurs : l'application calcule le <strong style="color:var(--accent2)">handicap</strong> de l'équipe la moins bien classée (écart de rangs ÷ 2, plafonné à ${rulesBonus} pts).</p>
+      <p>3. Jouez un set de <strong style="color:var(--text)">${g.cfg.target} points</strong> (2 pts d'écart, plafond ${g.cfg.cap}), en partant du score de handicap, puis validez.</p>
+      <p>4. <strong style="color:var(--text)">Points échangés :</strong> le favori qui gagne prend 1 pt ; l'outsider qui gagne prend (écart de rangs ÷ ${g.ui.mode==='simple'?2:4}) pts, au moins 1. Le perdant perd la même valeur.</p>
+      <p>5. <strong style="color:var(--text)">Bonus mixité :</strong> l'équipe avec une fille de plus (ou la joueuse contre un joueur en simple) gagne le double des points si elle l'emporte.</p>
+    </div>
+  </details>
+  <div class="status-bar">
+    <div class="stat-item"><div class="stat-val">${g.players.length}</div><div class="stat-lbl">Joueurs</div></div>
+    <div class="stat-item"><div class="stat-val">${played}</div><div class="stat-lbl">Matchs joués</div></div>
+    <div class="stat-item"><div class="stat-val">${lead?gtEsc(gtName(lead.id)):'—'}</div><div class="stat-lbl">Leader</div></div>
+    <div class="stat-item"><div class="stat-val">${lead?lead.pts:'—'}</div><div class="stat-lbl">Points du leader</div></div>
+  </div>
+  <input type="text" id="gt-search" placeholder="🔍 Rechercher un joueur…" value="${gtEsc(gtSearch)}" oninput="gtSearch=this.value;gtEl('gt-rank-body').innerHTML=gtRankingRows()" style="width:100%;margin-bottom:12px">
+  <div class="card" style="padding:6px 0;overflow-x:auto">
+    <table><thead><tr><th>#</th><th>Joueur</th><th>Pts</th><th>Évol.</th><th>V</th><th>D</th><th>Série</th></tr></thead>
+    <tbody id="gt-rank-body">${gtRankingRows()}</tbody></table>
+  </div>`;
+}
+function gtRankingRows(){
+  const g=gtG(),mode=g.ui.mode,{order}=gtCompute(mode),ctx=gtBadgeCtx(mode);
+  const q=gtSearch.trim().toLowerCase();
+  const rows=order.filter(s=>!q||gtName(s.id).toLowerCase().includes(q)).map(s=>{
+    const d=s.pts-s.start;
+    const evo=d>0?`<span style="color:var(--win)">▲+${d}</span>`:d<0?`<span style="color:var(--lose)">▼${d}</span>`:'<span style="color:var(--muted)">—</span>';
+    const rk=s.rank===1?'🥇':s.rank===2?'🥈':s.rank===3?'🥉':'#'+s.rank;
+    const bd=gtBadges(s.id,ctx,true);
+    return`<tr>
+      <td class="rank-num ${s.rank<=3?'rank-'+s.rank:''}">${rk}</td>
+      <td style="cursor:pointer" onclick="gtOpenPlayer('${s.id}')" title="Voir les matchs"><div style="font-weight:600">${gtEsc(gtName(s.id))}${gtIsF(gtP(s.id))?' <span style="color:#ff69b4;font-size:.7rem">♀</span>':''}</div>${bd?`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">${bd}</div>`:''}</td>
+      <td class="pts" style="font-size:1.1rem">${s.pts}</td><td>${evo}</td>
+      <td style="color:var(--win)">${s.wins}</td><td style="color:var(--lose)">${s.losses}</td><td style="color:var(--accent3)">${s.maxStreak}</td></tr>`;
+  }).join('');
+  return rows||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px">Aucun joueur trouvé</td></tr>';
+}
+
+// ── Saisie d'un match ────────────────────────────────
+function gtViewMatch(){
+  const g=gtG(),mode=g.ui.mode,simple=mode==='simple',{st,order}=gtCompute(mode);
+  const n=simple?2:4;
+  const slotLbl=simple?['Joueur 1','Joueur 2']:['Équipe 1 · joueur A','Équipe 1 · joueur B','Équipe 2 · joueur A','Équipe 2 · joueur B'];
+  const now=Date.now();
+  g.pending=(g.pending||[]).filter(p=>now-p.ts<4*3600e3);
+  const pend=g.pending.filter(p=>p.mode===mode).map(p=>{
+    const age=Math.round((now-p.ts)/60000);
+    return`<div class="player-row" style="border:1px solid rgba(240,192,64,.3)">
+      <span style="flex:1;font-size:.84rem;font-weight:600">${gtEsc(p.label)} <span style="color:var(--muted);font-weight:400">· il y a ${age<60?age+' min':Math.round(age/60)+' h'}</span></span>
+      <button class="btn btn-primary btn-sm" onclick="gtLoadPending('${p.id}')">▶ Reprendre</button>
+      <button class="btn btn-ghost btn-sm" onclick="gtRemovePending('${p.id}')">✕</button></div>`;}).join('');
+  return`
+  <datalist id="gt-dl">${order.map(s=>`<option value="${gtEsc(gtName(s.id))}" label="#${s.rank} · ${s.pts} pts"></option>`).join('')}</datalist>
+  ${pend?`<div class="card"><div class="card-title">⏳ Matchs en attente</div>${pend}</div>`:''}
+  <div class="card">
+    <div class="card-title">⚡ Nouveau match — ${simple?'Simple':'Double'} · ${g.cfg.target} points</div>
+    <div style="display:grid;grid-template-columns:${simple?'1fr 1fr':'1fr 1fr'};gap:10px">
+      ${Array.from({length:n},(_,i)=>`<div class="form-row" style="margin-bottom:0"><label class="form-label">${slotLbl[i]}</label>
+        <input type="text" id="gt-slot-${i}" list="gt-dl" placeholder="Nom du joueur…" autocomplete="off" value="${gtForm.ids[i]?gtEsc(gtName(gtForm.ids[i])):''}" oninput="gtSlotInput(${i},this.value)" style="width:100%"></div>`).join('')}
+    </div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:.84rem;cursor:pointer"><input type="checkbox" ${gtForm.noH?'checked':''} onchange="gtForm.noH=this.checked;gtUpdatePreview()" style="accent-color:var(--accent)"> ☀️ Sans handicap (match à 0-0)</label>
+    <div id="gt-block" class="alert alert-warn hidden" style="margin-top:12px"></div>
+    <div id="gt-preview"></div>
+  </div>`;
+}
+function gtFindId(v){
+  v=String(v).trim().toLowerCase();if(!v)return'';
+  const p=gtG().players.find(p=>p.name.toLowerCase()===v);return p?p.id:'';
+}
+function gtSlotInput(i,v){gtForm.ids[i]=gtFindId(v);gtUpdatePreview();}
+function gtUpdatePreview(){
+  const g=gtG();if(!g)return;
+  const mode=g.ui.mode,simple=mode==='simple',n=simple?2:4;
+  const box=gtEl('gt-preview'),blk=gtEl('gt-block');if(!box)return;
+  const show=msg=>{blk.innerHTML=msg;blk.classList.toggle('hidden',!msg);};
+  gtForm.calc=null;box.innerHTML='';show('');
+  const ids=gtForm.ids.slice(0,n);
+  if(ids.some(x=>!x)) return;
+  if(new Set(ids).size<n){show('⚠️ Un joueur est sélectionné deux fois.');return;}
+  const c=gtCalc(mode,ids,gtForm.noH);gtForm.calc=c;
+  if(g.cfg.blockDup&&gtDupToday(mode,c.t1,c.t2)){gtForm.calc=null;show('⛔ Ce match a déjà été joué aujourd\'hui entre ces mêmes joueurs.');return;}
+  const teamHtml=(team,k,tot)=>`<div class="gt-team ${c.underdog===k?'under':''}">
+    <div class="gt-team-lbl">${simple?'':'Équipe '+k+' · '}${c.underdog===k?'⚡ Outsider':c.underdog===0?'Égalité':'Favori'}</div>
+    <div style="font-weight:600">${team.map(id=>gtEsc(gtName(id))+(gtIsF(gtP(id))?' <span style="color:#ff69b4">♀</span>':'')).join('<br>')}</div>
+    <div style="font-size:.72rem;color:var(--muted);margin-top:4px">${simple?'Rang #'+tot:'Σ rangs = '+tot}</div></div>`;
+  const outsiderGain=c.ptsUpset*(c.advTeam&&c.advTeam===c.underdog?2:1);
+  const favGain=c.advTeam&&c.advTeam===(c.underdog===1?2:1)?2:1;
+  const capNote=c.rawBonus>g.cfg.maxBonus&&!gtForm.noH?` <span style="color:var(--accent2)">(écart réel ${c.rawBonus}, plafonné à ${g.cfg.maxBonus})</span>`:'';
+  box.innerHTML=`
+    <div class="gt-teams">${teamHtml(c.t1,1,c.tot1)}<div class="gt-vs">VS</div>${teamHtml(c.t2,2,c.tot2)}</div>
+    <div style="text-align:center;margin-bottom:10px">
+      ${gtForm.noH||c.underdog===0
+        ?`<div style="font-size:.84rem;color:var(--accent2)">☀️ <strong>${gtForm.noH?'Sans handicap':'Rangs identiques'}</strong> — départ à 0-0.</div>`
+        :`<div style="font-size:.8rem;color:var(--muted)">L'outsider démarre avec</div><div class="gt-bonus">${c.bonus} — 0</div>
+          <div style="font-size:.72rem;color:var(--muted)">écart de rangs ${c.diff} ÷ 2 = ${c.rawBonus}${capNote}</div>`}
+      <div style="margin-top:8px;font-size:.8rem;display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+        <span>⚡ Outsider gagne : <strong style="color:var(--accent)">+${outsiderGain} pt${outsiderGain>1?'s':''}</strong></span>
+        <span>✅ Favori gagne : <strong style="color:var(--accent)">+${favGain} pt${favGain>1?'s':''}</strong></span></div>
+      ${c.advTeam?`<div class="alert alert-warn" style="margin:10px 0 0;text-align:left">♀️ <strong>Bonus mixité ×2</strong> — ${simple?'si la joueuse gagne':'si l\'équipe '+c.advTeam+' gagne'}, ses points sont doublés.</div>`:''}
+    </div>
+    <div class="gt-score-row">
+      <div class="form-row" style="margin-bottom:0"><label class="form-label">${gtEsc(c.t1.map(gtName).join(' / '))}</label><input type="number" id="gt-s1" inputmode="numeric" min="0" max="${g.cfg.cap}" value="${c.underdog===1?c.bonus:0}" oninput="gtCheckScore()" style="width:100%;text-align:center;font-size:1.4rem"></div>
+      <div class="form-row" style="margin-bottom:0"><label class="form-label">${gtEsc(c.t2.map(gtName).join(' / '))}</label><input type="number" id="gt-s2" inputmode="numeric" min="0" max="${g.cfg.cap}" value="${c.underdog===2?c.bonus:0}" oninput="gtCheckScore()" style="width:100%;text-align:center;font-size:1.4rem"></div>
+    </div>
+    <div id="gt-score-alert" class="alert alert-warn hidden" style="margin-top:10px"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn btn-primary" style="flex:2" onclick="gtSubmit()">✓ Valider le match</button>
+      <button class="btn btn-ghost" style="flex:1" onclick="gtSavePending()">⏳ En attente</button>
+      <button class="btn btn-ghost" onclick="gtResetForm()">✕</button>
+    </div>`;
+}
+function gtCheckScore(){
+  const g=gtG(),a=gtEl('gt-score-alert');if(!g||!a)return'';
+  const s1=parseInt(gtEl('gt-s1').value),s2=parseInt(gtEl('gt-s2').value);
+  // Tant que le match n'est pas fini (aucun score ≥ cible), on n'affiche pas d'erreur
+  const msg=Math.max(s1||0,s2||0)<g.cfg.target?'':gtValidate(s1,s2,g.cfg);
+  a.textContent='⚠️ '+msg;a.classList.toggle('hidden',!msg);
+  return gtValidate(s1,s2,g.cfg);
+}
+function gtResetForm(){gtForm={ids:['','','',''],noH:gtForm.noH,calc:null,pendingId:null};gtRender();}
+function gtSubmit(){
+  const g=gtG(),c=gtForm.calc;
+  if(!g||!c){toast('Sélectionnez tous les joueurs','#e05c3a');return;}
+  const s1=parseInt(gtEl('gt-s1').value),s2=parseInt(gtEl('gt-s2').value);
+  const err=gtValidate(s1,s2,g.cfg);
+  if(err){gtCheckScore();toast(err,'#e05c3a');return;}
+  const m={id:'m'+(++g.seq),seq:g.seq,ts:Date.now(),mode:c.mode,team1:c.t1,team2:c.t2,score1:s1,score2:s2,
+    bonus:c.bonus,diff:c.diff,underdog:c.underdog,ptsUpset:c.ptsUpset,advTeam:c.advTeam,noHandicap:!!gtForm.noH,ranks:c.ranks};
+  gtResolve(m);
+  g.matches[c.mode].push(m);
+  if(gtForm.pendingId) g.pending=g.pending.filter(p=>p.id!==gtForm.pendingId);
+  gtForm={ids:['','','',''],noH:gtForm.noH,calc:null,pendingId:null};
+  gtTouch();
+  toast(`✅ Match validé ! +${m.ptsWonWinner} pt${m.ptsWonWinner>1?'s':''} pour les vainqueurs${m.girlsBonus?' (♀️ ×2)':''}`);
+  gtRender();
+}
+function gtSavePending(){
+  const g=gtG(),c=gtForm.calc;if(!g||!c){toast('Sélectionnez tous les joueurs','#e05c3a');return;}
+  const label=c.t1.map(gtName).join(' / ')+' vs '+c.t2.map(gtName).join(' / ');
+  g.pending.push({id:'p'+Date.now(),mode:c.mode,ids:[...c.t1,...c.t2],noH:gtForm.noH,label,ts:Date.now()});
+  gtForm={ids:['','','',''],noH:gtForm.noH,calc:null,pendingId:null};
+  gtTouch();toast('⏳ Match mis en attente');gtRender();
+}
+function gtLoadPending(id){
+  const g=gtG();const p=g.pending.find(x=>x.id===id);if(!p)return;
+  g.ui.mode=p.mode;
+  gtForm={ids:[...p.ids,'','','',''].slice(0,4),noH:!!p.noH,calc:null,pendingId:id};
+  gtRender();
+}
+function gtRemovePending(id){const g=gtG();g.pending=g.pending.filter(p=>p.id!==id);gtTouch();gtRender();}
+
+// ── Stats ────────────────────────────────────────────
+function gtStats(mode,keys){
+  const out={};
+  [...gtG().matches[mode]].filter(m=>!keys||keys.includes(gtMonthKey(m.ts))).sort(gtCmp).forEach(m=>{
+    const get=id=>out[id]||(out[id]={pts:0,wins:0,losses:0,streak:0,maxStreak:0});
+    (m.winner===1?m.team1:m.team2).forEach(id=>{const s=get(id);s.pts+=m.ptsWonWinner;s.wins++;s.streak++;if(s.streak>s.maxStreak)s.maxStreak=s.streak;});
+    (m.winner===1?m.team2:m.team1).forEach(id=>{const s=get(id);s.pts-=m.ptsWon;s.losses++;s.streak=0;});
+  });
+  return out;
+}
+function gtSetStats(v){gtStatsView=v;gtRender();}
+function gtViewStats(){
+  const g=gtG(),mode=g.ui.mode,cur=gtMonthKey(Date.now()),prev=gtPrevMonthKey();
+  const cfg={current:{keys:[cur],label:gtMonthLabel(cur)},prev:{keys:[prev],label:gtMonthLabel(prev)},bi:{keys:[prev,cur],label:gtMonthLabel(prev)+' + '+gtMonthLabel(cur)},all:{keys:null,label:'Tout le tournoi'}}[gtStatsView];
+  const stats=gtStats(mode,cfg.keys),ctx=gtBadgeCtx(mode);
+  const entries=Object.entries(stats);
+  const top3=(label,icon,key,suffix='')=>{
+    const rows=entries.filter(([,s])=>s[key]!==0).sort(([,a],[,b])=>b[key]-a[key]).slice(0,3);
+    return`<div class="card" style="margin-bottom:0"><div class="card-title">${icon} ${label}</div>${rows.length?rows.map(([id,s],i)=>
+      `<div style="display:flex;gap:8px;align-items:center;padding:5px 0;font-size:.85rem"><span>${['🥇','🥈','🥉'][i]}</span><span style="flex:1">${gtEsc(gtName(id))}${gtBadges(id,ctx,false)}</span><strong style="color:var(--accent)">${key==='pts'&&s[key]>0?'+':''}${s[key]}${suffix}</strong></div>`).join('')
+      :'<div style="color:var(--muted);font-size:.8rem;padding:8px 0">Aucun match sur cette période</div>'}</div>`;};
+  const ranking=entries.sort(([,a],[,b])=>b.pts-a.pts||b.wins-a.wins);
+  return`
+  <div class="gt-bar">${[['current','Mois en cours'],['prev','Mois précédent'],['bi','2 mois'],['all','Tout']].map(([k,l])=>`<div class="t-chip ${gtStatsView===k?'active':''}" onclick="gtSetStats('${k}')">${l}</div>`).join('')}</div>
+  <div style="font-size:.8rem;color:var(--muted);margin-bottom:10px">Période : <strong style="color:var(--accent)">${cfg.label}</strong></div>
+  <div class="grid-2" style="margin-bottom:14px">${top3('Top victoires','🏆','wins')}${top3('Top défaites','💀','losses')}${top3('Meilleure série','🔥','maxStreak',' v.')}${top3('Plus grosse progression','📈','pts',' pts')}</div>
+  <div class="card" style="padding:6px 0;overflow-x:auto"><table><thead><tr><th>#</th><th>Joueur</th><th>Pts</th><th>V</th><th>D</th></tr></thead><tbody>
+  ${ranking.slice(0,100).map(([id,s],i)=>`<tr><td class="rank-num">#${i+1}</td><td style="cursor:pointer" onclick="gtOpenPlayer('${id}')">${gtEsc(gtName(id))}</td><td class="pts">${s.pts>0?'+':''}${s.pts}</td><td style="color:var(--win)">${s.wins}</td><td style="color:var(--lose)">${s.losses}</td></tr>`).join('')
+    ||'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:26px">Aucun match sur cette période</td></tr>'}
+  </tbody></table></div>`;
+}
+
+// ── Historique ───────────────────────────────────────
+function gtViewHisto(){
+  return`<input type="text" placeholder="🔍 Rechercher un joueur…" value="${gtEsc(gtHistoSearch)}" oninput="gtHistoSearch=this.value;gtEl('gt-histo').innerHTML=gtHistoRows()" style="width:100%;margin-bottom:12px"><div id="gt-histo">${gtHistoRows()}</div>`;
+}
+function gtMatchCard(m,actions){
+  const t1=m.team1.map(id=>gtEsc(gtName(id))).join(' / '),t2=m.team2.map(id=>gtEsc(gtName(id))).join(' / ');
+  const w1=m.winner===1;
+  const tags=[m.upset?'⚡':'',m.girlsBonus?'♀️×2':'',m.noHandicap?'☀️':''].filter(Boolean).map(x=>`<span class="gt-badge" style="background:var(--surface2);color:var(--muted)">${x}</span>`).join('');
+  return`<div class="card" style="padding:0;overflow:hidden;margin-bottom:10px;border-color:${w1?'rgba(62,207,142,.25)':'rgba(224,92,58,.2)'}">
+    <div style="display:flex;gap:10px;padding:12px 14px">
+      <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-width:0">
+        <div style="display:flex;justify-content:space-between;gap:8px;font-size:.85rem;${w1?'color:var(--accent);font-weight:700':''}"><span>${w1?'🏆 ':''}${t1}</span><span style="font-size:1.2rem">${m.score1}</span></div>
+        <div style="display:flex;justify-content:space-between;gap:8px;font-size:.85rem;${!w1?'color:var(--accent);font-weight:700':''}"><span>${!w1?'🏆 ':''}${t2}</span><span style="font-size:1.2rem">${m.score2}</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;font-size:.72rem;color:var(--muted)"><div>${tags}</div><div>+${m.ptsWonWinner} / −${m.ptsWon}</div>${actions||''}</div>
+    </div>
+    <div style="font-size:.7rem;color:var(--muted);padding:4px 14px 8px;border-top:1px solid var(--border)">${new Date(m.ts).toLocaleString('fr-FR')}${m.bonus?` · handicap ${m.bonus}`:''}</div></div>`;
+}
+function gtHistoRows(){
+  const g=gtG(),q=gtHistoSearch.trim().toLowerCase();
+  const list=[...g.matches[g.ui.mode]].sort((a,b)=>gtCmp(b,a)).filter(m=>!q||[...m.team1,...m.team2].some(id=>gtName(id).toLowerCase().includes(q)));
+  return list.map(m=>gtMatchCard(m,`<button class="btn btn-ghost btn-sm" onclick="gtOpenEdit('${m.id}')">✏️ Corriger</button>`)).join('')
+    ||'<div style="text-align:center;color:var(--muted);padding:34px">Aucun match enregistré</div>';
+}
+
+// ── Modales (correction de match / fiche joueur) ─────
+function gtOpenModal(html){gtEl('gt-modal-body').innerHTML=html;gtEl('gt-modal').classList.remove('hidden');}
+function gtCloseModal(){gtEl('gt-modal').classList.add('hidden');gtEditing=null;}
+function gtOpenEdit(id){
+  const g=gtG(),mode=g.ui.mode,m=g.matches[mode].find(x=>x.id===id);if(!m)return;
+  gtEditing={id,mode};
+  gtOpenModal(`<div class="modal-title">Corriger le <span style="color:var(--accent)">match</span></div>
+    <div class="modal-sub">${m.team1.map(i=>gtEsc(gtName(i))).join(' / ')} <strong>vs</strong> ${m.team2.map(i=>gtEsc(gtName(i))).join(' / ')}</div>
+    <div class="gt-score-row"><div class="form-row"><label class="form-label">Score équipe 1</label><input type="number" id="gt-e1" value="${m.score1}" min="0" style="width:100%;text-align:center;font-size:1.4rem"></div>
+    <div class="form-row"><label class="form-label">Score équipe 2</label><input type="number" id="gt-e2" value="${m.score2}" min="0" style="width:100%;text-align:center;font-size:1.4rem"></div></div>
+    <div style="font-size:.74rem;color:var(--muted)">Le handicap de départ (${m.bonus}) et les rangs du moment sont conservés ; les points sont recalculés.</div>
+    <div id="gt-edit-alert" class="alert alert-warn hidden" style="margin-top:10px"></div>
+    <div class="modal-actions"><button class="btn btn-danger" onclick="gtDeleteMatch()">🗑 Supprimer</button><button class="btn btn-ghost" onclick="gtCloseModal()">Annuler</button><button class="btn btn-primary" onclick="gtSaveEdit()">✓ Enregistrer</button></div>`);
+}
+function gtSaveEdit(){
+  const g=gtG();if(!g||!gtEditing)return;
+  const m=g.matches[gtEditing.mode].find(x=>x.id===gtEditing.id);if(!m)return;
+  const s1=parseInt(gtEl('gt-e1').value),s2=parseInt(gtEl('gt-e2').value),err=gtValidate(s1,s2,g.cfg);
+  if(err){const a=gtEl('gt-edit-alert');a.textContent='⚠️ '+err;a.classList.remove('hidden');return;}
+  m.score1=s1;m.score2=s2;gtResolve(m);
+  gtCloseModal();gtTouch();gtRender();toast('✅ Match corrigé, classement recalculé');
+}
+function gtDeleteMatch(){
+  const g=gtG();if(!g||!gtEditing)return;
+  if(!confirm('Supprimer définitivement ce match ? Les points seront recalculés.'))return;
+  g.matches[gtEditing.mode]=g.matches[gtEditing.mode].filter(x=>x.id!==gtEditing.id);
+  gtCloseModal();gtTouch();gtRender();toast('Match supprimé, classement recalculé');
+}
+function gtOpenPlayer(id){
+  const g=gtG(),mode=g.ui.mode,{st}=gtCompute(mode),s=st[id];if(!s)return;
+  const list=[...g.matches[mode]].sort((a,b)=>gtCmp(b,a)).filter(m=>m.team1.includes(id)||m.team2.includes(id));
+  gtOpenModal(`<div class="modal-title">${gtEsc(gtName(id))}</div>
+    <div class="modal-sub">#${s.rank} · ${s.pts} pts · ${s.wins} V / ${s.losses} D · meilleure série ${s.maxStreak}</div>
+    <div style="max-height:55vh;overflow-y:auto">${list.map(m=>gtMatchCard(m)).join('')||'<div style="color:var(--muted);padding:20px;text-align:center">Aucun match joué</div>'}</div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="gtCloseModal()">Fermer</button></div>`);
+}
+
+// ── Joueurs ──────────────────────────────────────────
+function gtViewPlayers(){
+  const g=gtG(),{order}=gtCompute(g.ui.mode);
+  const hasMatches=id=>g.matches.double.concat(g.matches.simple).some(m=>m.team1.includes(id)||m.team2.includes(id));
+  return`<div class="card"><div class="card-title">➕ Ajouter un joueur (${g.players.length}/${GT_MAX_PLAYERS})</div>
+    <div class="add-player-row"><input type="text" id="gt-new-name" placeholder="Nom du joueur…" maxlength="40" onkeydown="if(event.key==='Enter')gtAddPlayer()">
+    <select id="gt-new-gender" style="flex:0 0 auto"><option value="H">H</option><option value="F">F</option></select>
+    <button class="btn btn-primary" onclick="gtAddPlayer()">+</button></div>
+    <div style="font-size:.74rem;color:var(--muted)">Le nouveau joueur démarre avec le plus petit score du classement.</div></div>
+  <div class="card" style="padding:10px">${order.map(s=>{const p=gtP(s.id);return`
+    <div class="player-row"><span class="player-num" style="width:34px">#${s.rank}</span>
+      <input type="text" value="${gtEsc(p.name)}" maxlength="40" onchange="gtRenamePlayer('${p.id}',this.value)" style="flex:2;min-width:70px">
+      <select onchange="gtSetGender('${p.id}',this.value)" style="padding:6px 8px;font-size:.85rem"><option value="H"${!gtIsF(p)?' selected':''}>H</option><option value="F"${gtIsF(p)?' selected':''}>F</option></select>
+      <span class="pts" style="min-width:34px;text-align:right">${s.pts}</span>
+      <button class="btn btn-danger btn-sm" ${hasMatches(p.id)?'disabled style="opacity:.3" title="A déjà joué"':''} onclick="gtRemovePlayer('${p.id}')">✕</button></div>`;}).join('')}</div>`;
+}
+function gtAddPlayer(){
+  const g=gtG(),inp=gtEl('gt-new-name'),name=inp.value.trim();
+  if(!name){inp.focus();return;}
+  if(g.players.length>=GT_MAX_PLAYERS){toast(`Maximum ${GT_MAX_PLAYERS} joueurs`,'#e05c3a');return;}
+  if(g.players.some(p=>p.name.toLowerCase()===name.toLowerCase())){toast('Ce joueur existe déjà','#e05c3a');return;}
+  const low=Math.min(...['double','simple'].map(m=>gtCompute(m).order.at(-1).pts));
+  g.players.push({id:'g'+(g.nextId++),name,gender:gtEl('gt-new-gender').value,startPts:Math.max(1,low)});
+  gtTouch();gtRender();toast('Joueur ajouté : '+name);
+}
+function gtRenamePlayer(id,v){
+  const g=gtG(),p=gtP(id);v=v.trim();
+  if(!v||g.players.some(x=>x.id!==id&&x.name.toLowerCase()===v.toLowerCase())){toast(v?'Ce nom existe déjà':'Nom vide','#e05c3a');gtRender();return;}
+  p.name=v;gtTouch();
+}
+function gtSetGender(id,v){gtP(id).gender=v;gtTouch();}
+function gtRemovePlayer(id){
+  const g=gtG();
+  if(!confirm(`Retirer ${gtName(id)} du tournoi ?`))return;
+  g.players=g.players.filter(p=>p.id!==id);g.pending=g.pending.filter(p=>!p.ids.includes(id));
+  gtTouch();gtRender();
+}
+
+// ── Réglages, export / import ────────────────────────
+function gtViewSettings(){
+  const g=gtG(),c=g.cfg;
+  return`<div class="card"><div class="card-title">⚙ Règles</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-row"><label class="form-label">Points par set</label><select id="gt-r-target" onchange="gtApplyCfg(false)" style="width:100%">${[11,15,21].map(v=>`<option value="${v}"${c.target===v?' selected':''}>${v} points</option>`).join('')}</select></div>
+      <div class="form-row"><label class="form-label">Handicap max (pts)</label><input type="number" id="gt-r-bonus" value="${c.maxBonus}" min="0" max="${c.target-2}" onchange="gtApplyCfg(true)" style="width:100%"></div>
+      <div class="form-row"><label class="form-label">Même duel le même jour</label><select id="gt-r-dup" onchange="gtApplyCfg(true)" style="width:100%"><option value="1"${c.blockDup?' selected':''}>Interdit</option><option value="0"${!c.blockDup?' selected':''}>Autorisé</option></select></div>
+    </div>
+    <div style="font-size:.74rem;color:var(--muted)">Plafond du set : ${c.cap} points. Les changements s'appliquent aux prochains matchs ; l'historique n'est pas modifié.</div></div>
+  <div class="card"><div class="card-title">💾 Sauvegarde (hors ligne)</div>
+    <p style="font-size:.82rem;color:var(--muted);margin-bottom:10px">Tout est enregistré automatiquement dans ce navigateur, sans connexion ni serveur. Pour déplacer le tournoi sur un autre appareil ou en garder une copie, exportez un fichier puis importez-le.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" onclick="gtExport()">⬇ Exporter (JSON)</button>
+    <button class="btn btn-ghost btn-sm" onclick="gtEl('gt-import-file').click()">⬆ Importer (JSON)</button>
+    <input type="file" id="gt-import-file" accept=".json,application/json" class="hidden" onchange="gtImport(this)"></div></div>
+  <div class="card" style="border-color:rgba(224,92,58,.4)"><div class="card-title" style="color:var(--accent2)">⚠ Zone de danger</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-danger btn-sm" onclick="gtResetPoints()">Remettre les points à zéro</button>
+    <button class="btn btn-danger btn-sm" onclick="gtBackToSetup()">Retour à la configuration</button></div></div>`;
+}
+function gtApplyCfg(manualBonus){
+  const g=gtG(),c=g.cfg;
+  c.target=parseInt(gtEl('gt-r-target').value)||15;c.cap=gtCap(c.target);
+  if(manualBonus){const b=parseInt(gtEl('gt-r-bonus').value);c.maxBonus=isNaN(b)?0:Math.max(0,Math.min(b,c.target-2));}
+  else c.maxBonus=gtDefaultBonus(c.target);
+  c.blockDup=gtEl('gt-r-dup').value==='1';
+  gtTouch();gtRender();toast('Règles mises à jour');
+}
+function gtExport(){
+  const g=gtG();
+  const blob=new Blob([JSON.stringify({app:'tournamentmaster-geant',version:1,exportedAt:new Date().toISOString(),geant:g},null,1)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='tournoi-geant-'+gtDay(Date.now())+'.json';document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function gtImport(input){
+  const f=input.files&&input.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result).geant;
+      if(!d||!Array.isArray(d.players)||!d.matches||!Array.isArray(d.matches.double)||!Array.isArray(d.matches.simple)||!d.cfg) throw new Error('format');
+      if(!confirm(`Importer ${d.players.length} joueurs et ${d.matches.double.length+d.matches.simple.length} matchs ?\nLe Tournoi Géant actuel sera remplacé.`))return;
+      d.started=true;d.pending=d.pending||[];d.ui=d.ui||{mode:'double',view:'classement'};
+      d.seq=d.seq||Math.max(0,...d.matches.double.concat(d.matches.simple).map(m=>m.seq||0));
+      d.nextId=d.nextId||d.players.length+1;
+      const t=T();t.geant=d;t.format='geant';t.currentPhase='geant';
+      gtForm={ids:['','','',''],noH:false,calc:null,pendingId:null};
+      applyFormatTabs();gtTouch();gtRender();toast('✅ Tournoi importé');
+    }catch(e){toast('Fichier invalide','#e05c3a');}
+    input.value='';
+  };
+  r.readAsText(f);
+}
+function gtResetPoints(){
+  const g=gtG();
+  if(!confirm('Effacer TOUS les matchs et remettre les points de départ ?\nLes joueurs sont conservés.'))return;
+  g.matches={double:[],simple:[]};g.pending=[];gtTouch();gtRender();toast('Points remis à zéro');
+}
+function gtBackToSetup(){
+  const t=T();
+  if(!confirm('Revenir à la configuration ?\nLe Tournoi Géant en cours (matchs et points) sera supprimé.'))return;
+  const g=t.geant;
+  t.geantDraft={target:g.cfg.target,maxBonus:g.cfg.maxBonus,blockDup:g.cfg.blockDup,players:g.players.map(p=>({name:p.name,gender:p.gender}))};
+  delete t.geant;t.format=undefined;t.currentPhase='setup';gtCache={};
+  gtEl('phase-label').textContent='SETUP';
+  applyFormatTabs();selectFormat('geant');showTab('setup');saveState();
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&gtEl('gt-modal')&&!gtEl('gt-modal').classList.contains('hidden'))gtCloseModal();});
+
+
 // ── INIT ──
 const loaded=loadState();
 if(!loaded){
@@ -3865,11 +4580,12 @@ const _initT2=T();
 if(_initT2){
   document.getElementById('tab-btn-phase2').classList.toggle('hidden',(_initT2.poulePhases?.length||0)<2);
   document.getElementById('tab-btn-interclub').classList.toggle('hidden',!_initT2.interclub?.started);
+  applyFormatTabs();
   // Restore last active tab (validate it's accessible first)
   const savedTab=_initT2.activeTab||'planning';
   const tabBtn=document.getElementById('tab-btn-'+savedTab);
   const tabHidden=tabBtn&&tabBtn.classList.contains('hidden');
-  const defaultTab=_initT2.format==='interclub'?'interclub':'planning';
+  const defaultTab=_initT2.format==='interclub'?'interclub':_initT2.format==='geant'?'geant':'planning';
   // Use _showTabSilent to avoid re-saving state on init
   const tabToRestore=(!tabBtn||tabHidden)?defaultTab:savedTab;
   // Show without overwriting activeTab
@@ -3881,6 +4597,7 @@ if(_initT2){
   else if(tabToRestore==='elimination') renderBracket();
   else if(tabToRestore==='phase2') renderPhase2();
   else if(tabToRestore==='interclub') renderInterclub();
+  else if(tabToRestore==='geant') gtRender();
 }
 if(loaded&&tournaments.length){
   setTimeout(()=>toast(`✓ ${tournaments.length} tournoi(s) restauré(s) depuis la mémoire`,'#3ecf8e'),500);
