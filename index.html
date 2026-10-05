@@ -26,15 +26,12 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:0}
 
 /* ── TOURNAMENT BAR ── */
-#tournament-bar{background:var(--surface2);border-bottom:1px solid var(--border);padding:8px 16px;padding-left:calc(16px + var(--safe-l));padding-right:calc(16px + var(--safe-r));padding-top:calc(8px + var(--safe-top));display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:200;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-shrink:0}
-#tournament-bar::-webkit-scrollbar{display:none}
 .t-chip{font-size:.74rem;font-weight:700;letter-spacing:.5px;padding:7px 13px;border-radius:20px;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--muted);transition:all .2s;white-space:nowrap;display:flex;align-items:center;gap:6px;min-height:34px;touch-action:manipulation}
 .t-chip.active{background:rgba(240,192,64,.15);border-color:var(--accent);color:var(--accent)}
 .t-chip .t-del{opacity:.5;cursor:pointer;padding:2px 3px;font-size:.9rem;line-height:1}
-#btn-new-t{font-size:.74rem;font-weight:700;letter-spacing:1px;padding:7px 13px;border-radius:20px;cursor:pointer;border:1px dashed var(--accent);background:transparent;color:var(--accent);transition:all .2s;white-space:nowrap;flex-shrink:0;min-height:34px;touch-action:manipulation}
 
 /* ── HEADER ── */
-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;padding-left:calc(16px + var(--safe-l));padding-right:calc(16px + var(--safe-r));border-bottom:1px solid var(--border);background:rgba(10,10,15,.95);backdrop-filter:blur(12px);position:sticky;top:50px;z-index:100}
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;padding-top:calc(12px + var(--safe-top));padding-left:calc(16px + var(--safe-l));padding-right:calc(16px + var(--safe-r));border-bottom:1px solid var(--border);background:rgba(10,10,15,.95);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100}
 .logo{font-family:'Bebas Neue',sans-serif;font-size:1.65rem;letter-spacing:3px;color:var(--accent);text-shadow:0 0 30px rgba(240,192,64,.4);line-height:1}.logo span{color:var(--text)}
 .phase-badge{font-size:.6rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:4px 10px;border-radius:2px;background:var(--surface2);border:1px solid var(--border);color:var(--muted)}
 .phase-badge.active{color:var(--accent);border-color:var(--accent)}
@@ -203,17 +200,16 @@ tbody td{padding:7px 10px}
   .modal{border-radius:10px;align-self:center;margin:20px}
   .modal::before{display:none}
   .modal-overlay{align-items:center}
-  nav{position:sticky;top:103px;bottom:auto;border-top:none;border-bottom:1px solid var(--border);flex-direction:row;padding:0 16px}
+  nav{position:sticky;top:var(--hdr-h,64px);bottom:auto;border-top:none;border-bottom:1px solid var(--border);flex-direction:row;padding:0 16px}
   .tab{flex:none;flex-direction:row;padding:11px 16px;font-size:.76rem;border-bottom:2px solid transparent;border-top:none;gap:6px}
   .tab .tab-icon{font-size:.95rem}
   .tab .tab-label{font-size:.76rem}
   main{padding:22px 24px;padding-bottom:30px}
-  header{top:50px}
+  header{top:0}
   .grid-2{grid-template-columns:1fr 1fr}
   .grid-3{grid-template-columns:repeat(3,1fr)}
 }
 @media(min-width:900px){
-  #tournament-bar{padding:8px 40px;padding-top:8px}
   header{padding:14px 40px}
   nav{padding:0 40px}
   main{padding:26px 40px;padding-bottom:30px}
@@ -247,7 +243,7 @@ tbody td{padding:7px 10px}
 .seed-move-btns{display:flex;flex-direction:column;gap:2px}
 .seed-move-btn{background:var(--surface);border:1px solid var(--border);color:var(--muted);border-radius:3px;padding:2px 7px;cursor:pointer;font-size:.75rem;line-height:1.3;touch-action:manipulation}
 .seed-move-btn:active{background:var(--surface2)}
-@media print{header,nav,#tournament-bar,.btn,#toast-container,#save-dot{display:none!important}body{background:#fff;color:#000}.slot-match-cell,.slot-num{border-color:#ccc;background:#fff}main{padding:10px}}
+@media print{header,nav,.btn,#toast-container,#save-dot{display:none!important}body{background:#fff;color:#000}.slot-match-cell,.slot-num{border-color:#ccc;background:#fff}main{padding:10px}}
 
 /* ── ONGLETS DE MODE ── */
 #mode-tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin:0 10px;flex:1;min-width:0}
@@ -257,7 +253,10 @@ tbody td{padding:7px 10px}
 .mode-tab .mt-dot{width:6px;height:6px;border-radius:50%;background:var(--win)}
 .mode-tab .mt-n{opacity:.6;font-weight:400}
 header{flex-wrap:wrap;row-gap:8px}
-@media(max-width:560px){#mode-tabs{order:3;flex:1 0 100%;margin:0}.mode-tab{flex:1;justify-content:center;padding:7px 8px}}
+#mode-tabs{flex-wrap:wrap;overflow:visible}
+.mode-tab.new{border-style:dashed;border-color:var(--accent);color:var(--accent);background:transparent}
+.mode-pick{padding:5px 8px;font-size:.72rem;border-radius:16px;max-width:150px}
+@media(max-width:560px){#mode-tabs{order:3;flex:1 0 100%;margin:0}.mode-tab{flex:1;justify-content:center;padding:7px 8px}.mode-tab.new{flex:0 0 auto}.mode-tab.new .mt-lbl{display:none}.mode-pick{flex:1 0 100%;max-width:none}}
 /* ── TOURNOI GÉANT ── */
 .gt-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .gt-teams{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;margin:14px 0}
@@ -273,11 +272,6 @@ summary{outline:none}
 </head>
 <body>
 
-<!-- TOURNAMENT SELECTOR BAR -->
-<div id="tournament-bar">
-  <div id="t-chips"></div>
-  <button id="btn-new-t" onclick="createTournament()">+ Nouveau tournoi</button>
-</div>
 
 <header>
   <div class="logo">Tournament<span>Master</span></div>
@@ -857,12 +851,18 @@ function deleteT(id,e){
 const MODES=[['poules','◈','Poules'],['ligue','⚽','Ligue'],['interclub','🏸','Interclub'],['geant','🌐','Géant']];
 function tMode(t){return (t&&(t.mode||t.format))||'poules';}
 function renderModeTabs(){
-  const cur=tMode(T());
-  document.getElementById('mode-tabs').innerHTML=MODES.map(([m,icon,label])=>{
-    const list=tournaments.filter(t=>tMode(t)===m);
-    const running=list.some(t=>t.currentPhase&&t.currentPhase!=='setup');
+  const t=T();if(!t)return;
+  const cur=tMode(t);
+  const tabs=MODES.map(([m,icon,label])=>{
+    const list=tournaments.filter(x=>tMode(x)===m);
+    const running=list.some(x=>x.currentPhase&&x.currentPhase!=='setup');
     return`<div class="mode-tab ${m===cur?'active':''}" onclick="setMode('${m}')" title="${label}${list.length?' — '+list.length+' tournoi(s)':''}">
       <span>${icon}</span><span class="mt-lbl">${label}</span>${running?'<span class="mt-dot" title="Tournoi en cours"></span>':''}${list.length>1?`<span class="mt-n">${list.length}</span>`:''}</div>`;}).join('');
+  // Plusieurs tournois dans le mode actif : sélecteur pour passer de l'un à l'autre
+  const same=tournaments.filter(x=>tMode(x)===cur);
+  const esc=v=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const picker=same.length>1?`<select class="mode-pick" onchange="switchT(this.value)" title="Tournois ${MODES.find(x=>x[0]===cur)[2]}">${same.map(x=>`<option value="${x.id}"${x.id===activeTid?' selected':''}>${(x.currentPhase&&x.currentPhase!=='setup')?'● ':''}${esc(x.name)}</option>`).join('')}</select>`:'';
+  document.getElementById('mode-tabs').innerHTML=tabs+picker+`<div class="mode-tab new" onclick="createTournament()" title="Nouveau tournoi"><span>+</span><span class="mt-lbl">Nouveau tournoi</span></div>`;
 }
 // Bascule sur un mode : reprend le dernier tournoi de ce mode, ou en crée un vierge
 function setMode(mode){
@@ -875,15 +875,7 @@ function setMode(mode){
     toast(`Nouveau tournoi ${label} — le précédent est conservé`);
   }
 }
-function renderTBar(){
-  renderModeTabs();
-  document.getElementById('t-chips').innerHTML=tournaments.map(t=>{
-    const m=MODES.find(x=>x[0]===tMode(t));
-    const running=t.currentPhase&&t.currentPhase!=='setup';
-    return`<div class="t-chip ${t.id===activeTid?'active':''}" onclick="switchT('${t.id}')" title="${m[2]}${running?' — en cours':' — non lancé'}">
-      ${m[1]} ${t.name.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}${running?' <span style="color:var(--win)">●</span>':''}
-    </div>`;}).join('');
-}
+function renderTBar(){ renderModeTabs(); }
 
 // ══════════════════════════════════════════════════════
 //  TABS
@@ -4037,8 +4029,8 @@ function gtRenderRoster(){
   gtEl('gt-roster').innerHTML=d.players.map((p,i)=>`
     <div class="player-row">
       <span class="player-num">${i+1}</span>
-      <input type="text" value="${gtEsc(p.name)}" maxlength="40" onchange="gtDraftName(${i},this.value)" style="flex:2;min-width:70px">
-      <select onchange="gtDraftGender(${i},this.value)" style="padding:6px 8px;font-size:.85rem">
+      <input type="text" value="${gtEsc(p.name)}" maxlength="40" onchange="gtDraftName(${i},this.value)" style="flex:1 1 auto;min-width:70px">
+      <select onchange="gtDraftGender(${i},this.value)" style="flex:0 0 64px;width:64px;padding:6px 8px;font-size:.85rem">
         <option value="H"${p.gender==='H'?' selected':''}>H</option><option value="F"${p.gender==='F'?' selected':''}>F</option>
       </select>
       <button class="btn btn-danger btn-sm" onclick="gtDraftRemove(${i})">✕</button>
@@ -4521,7 +4513,7 @@ function gtViewPlayers(){
   <div class="card" style="padding:10px">${order.map(s=>{const p=gtP(s.id);return`
     <div class="player-row"><span class="player-num" style="width:34px">#${s.rank}</span>
       <input type="text" value="${gtEsc(p.name)}" maxlength="40" onchange="gtRenamePlayer('${p.id}',this.value)" style="flex:2;min-width:70px">
-      <select onchange="gtSetGender('${p.id}',this.value)" style="padding:6px 8px;font-size:.85rem"><option value="H"${!gtIsF(p)?' selected':''}>H</option><option value="F"${gtIsF(p)?' selected':''}>F</option></select>
+      <select onchange="gtSetGender('${p.id}',this.value)" style="flex:0 0 64px;width:64px;padding:6px 8px;font-size:.85rem"><option value="H"${!gtIsF(p)?' selected':''}>H</option><option value="F"${gtIsF(p)?' selected':''}>F</option></select>
       <span class="pts" style="min-width:34px;text-align:right">${s.pts}</span>
       <button class="btn btn-danger btn-sm" ${hasMatches(p.id)?'disabled style="opacity:.3" title="A déjà joué"':''} onclick="gtRemovePlayer('${p.id}')">✕</button></div>`;}).join('')}</div>`;
 }
@@ -4616,6 +4608,11 @@ function gtBackToSetup(){
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&gtEl('gt-modal')&&!gtEl('gt-modal').classList.contains('hidden'))gtCloseModal();});
 
+
+// Hauteur réelle de l'en-tête (il peut passer sur 2 lignes) : sert de décalage à la barre d'onglets collante
+function syncHeaderHeight(){const h=document.querySelector('header');if(h)document.documentElement.style.setProperty('--hdr-h',h.offsetHeight+'px');}
+window.addEventListener('resize',syncHeaderHeight);
+if('ResizeObserver' in window) new ResizeObserver(syncHeaderHeight).observe(document.querySelector('header'));
 
 // ── INIT ──
 const loaded=loadState();
